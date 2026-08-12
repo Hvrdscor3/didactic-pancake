@@ -188,6 +188,13 @@
   details.preview{ margin-top:16px; }
   details.preview summary{ cursor:pointer; font-size:12.5px; color:var(--ink-soft); user-select:none; }
   .preview-list{ margin-top:10px; display:flex; flex-direction:column; gap:6px; max-height:340px; overflow-y:auto; }
+  .search-input{
+    width:100%; padding:10px 14px; border:1.5px solid var(--line); border-radius:9px;
+    background:var(--bg); color:var(--ink); font-size:13px; font-family:inherit;
+    margin:10px 0 12px; outline:none; transition:border-color .15s ease;
+  }
+  .search-input:focus{ border-color:var(--ink); }
+  .search-input::placeholder{ color:var(--ink-soft); }
   .mini-row{
     display:flex; align-items:center; gap:10px; font-size:12.5px;
     padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg);
@@ -345,6 +352,7 @@
       <div class="cat-matrix" id="catMatrix1"></div>
       <details class="preview">
         <summary>Ver correos cargados</summary>
+        <input type="text" class="search-input" id="searchStage1" placeholder="🔍 Buscar por remitente o asunto…">
         <div class="preview-list" id="previewList"></div>
       </details>
     </div>
@@ -375,6 +383,7 @@
 
     <div class="panel">
       <p class="panel-title">Revisar correo por correo</p>
+      <input type="text" class="search-input" id="searchStage2" placeholder="🔍 Buscar por remitente o asunto…">
       <div class="filters" id="statusFilters">
         <div class="chip active" data-status="all">Todos</div>
         <div class="chip" data-status="pending">Sin decidir</div>
@@ -638,7 +647,8 @@
     loadSession: 0,
     seenIds: new Set(),
     liveEmail: null,
-    listRenderLimit: 300
+    listRenderLimit: 300,
+    searchQuery: ''
   };
 
   function escapeHtml(s){
@@ -822,12 +832,23 @@
       </div>`;
     }).join('');
 
+    const q1 = document.getElementById('searchStage1').value.trim().toLowerCase();
+    const matches1 = q1 ? state.emails.filter(e=>(e.sender+' '+e.subject).toLowerCase().includes(q1)) : state.emails;
     const preview = document.getElementById('previewList');
-    preview.innerHTML = state.emails.slice(0,200).map(e=>{
+    preview.innerHTML = matches1.slice(0,200).map(e=>{
       const meta = CATEGORY_META[e.category];
       return `<div class="mini-row"><span class="sender">${escapeHtml(e.sender)}</span><span class="subj">${escapeHtml(e.subject)}</span><span class="email-tag" style="--tag-c:var(--cat-${e.category});--tag-bg:var(--cat-${e.category}-bg);">${meta.emoji} ${meta.label}</span></div>`;
-    }).join('') || '<p style="color:var(--ink-soft);font-size:12.5px;">Aún no has cargado correos.</p>';
+    }).join('') || (q1
+      ? `<p style="color:var(--ink-soft);font-size:12.5px;">No hay coincidencias para "${escapeHtml(q1)}".</p>`
+      : '<p style="color:var(--ink-soft);font-size:12.5px;">Aún no has cargado correos.</p>');
+    if(matches1.length>200) preview.innerHTML += `<p style="color:var(--ink-soft);font-size:11px;margin-top:6px;">Mostrando 200 de ${matches1.length.toLocaleString('es-MX')} coincidencias — afina la búsqueda para ver menos resultados.</p>`;
   }
+
+  let searchDebounce1;
+  document.getElementById('searchStage1').addEventListener('input', ()=>{
+    clearTimeout(searchDebounce1);
+    searchDebounce1 = setTimeout(renderStage1, 150);
+  });
 
   document.getElementById('loadBatchBtn').addEventListener('click', ()=>{ if(!state.isScanning) runBatch(); });
 
@@ -857,8 +878,9 @@
 
   // ---------- STAGE 2 ----------
   function matchesStatusFilter(e){
-    if(state.statusFilter==='all') return true;
-    return e.status===state.statusFilter;
+    if(state.statusFilter!=='all' && e.status!==state.statusFilter) return false;
+    if(state.searchQuery && !(e.sender+' '+e.subject).toLowerCase().includes(state.searchQuery)) return false;
+    return true;
   }
 
   function renderCatMatrix2(){
@@ -974,6 +996,16 @@
     state.statusFilter = chip.dataset.status;
     state.listRenderLimit = LIST_PAGE_SIZE;
     renderStage2();
+  });
+
+  let searchDebounce2;
+  document.getElementById('searchStage2').addEventListener('input', (e)=>{
+    clearTimeout(searchDebounce2);
+    searchDebounce2 = setTimeout(()=>{
+      state.searchQuery = e.target.value.trim().toLowerCase();
+      state.listRenderLimit = LIST_PAGE_SIZE;
+      renderStage2();
+    }, 150);
   });
 
   document.getElementById('rescueAllVitalBtn').addEventListener('click', ()=>{
