@@ -30,6 +30,9 @@
     --cat-social: #C1743A;      --cat-social-bg: #F7EFE6;
     --cat-personal: #4C8A54;    --cat-personal-bg: #EBF3EB;
     --cat-other: #928C7E;       --cat-other-bg: #EFEDE7;
+
+    --mode-safe: #3E6DB5;   --mode-safe-bg: #EAEFF7;
+    --mode-live: #B5573F;   --mode-live-bg: #F6ECE9;
   }
   [data-theme="dark"]{
     --bg: #171613;
@@ -53,6 +56,9 @@
     --cat-social: #E0A26A;      --cat-social-bg: #332920;
     --cat-personal: #8FC397;    --cat-personal-bg: #1F2E22;
     --cat-other: #B8B2A3;       --cat-other-bg: #29271F;
+
+    --mode-safe: #8CACDD;   --mode-safe-bg: #202A38;
+    --mode-live: #E08468;   --mode-live-bg: #33241E;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
@@ -80,9 +86,6 @@
   .brand h1{ font-size:19px; margin:0; font-weight:600; }
   .brand p{ margin:0; font-size:12px; color:var(--ink-soft); }
   .conn-status{ display:flex; align-items:center; gap:10px; font-size:13px; color:var(--ink-soft); }
-  .dot{width:7px;height:7px;border-radius:50%;background:#C7C3B8;}
-  .dot.live{background:var(--keep);}
-  .dot.demo{background:var(--wait);}
 
   .btn{
     border:1px solid var(--line); background:var(--panel); color:var(--ink);
@@ -96,6 +99,27 @@
   .btn.danger{ background:var(--delete); color:#fff; border-color:var(--delete); font-weight:600; }
   .btn.danger:hover{opacity:.88;}
   .btn:disabled{opacity:.4;cursor:not-allowed;}
+
+  .mode-toggle{
+    display:flex; border:1.5px solid var(--line); border-radius:9px; overflow:hidden;
+  }
+  .mode-btn{
+    border:none; background:var(--panel); color:var(--ink-soft);
+    padding:9px 14px; font-size:12.5px; font-weight:600; cursor:pointer;
+    display:flex; align-items:center; gap:6px; transition:background .15s ease, color .15s ease;
+  }
+  .mode-btn:not(.active):hover{ background:var(--bg); }
+  .mode-btn.demo.active{ background:var(--mode-safe); color:#fff; }
+  .mode-btn.live.active{ background:var(--mode-live); color:#fff; }
+
+  .mode-banner{
+    display:flex; align-items:center; gap:9px; flex-wrap:wrap;
+    padding:11px 16px; border-radius:11px; font-size:13px; font-weight:500;
+    margin-bottom:20px; border:1.5px solid transparent;
+  }
+  .mode-banner.demo{ background:var(--mode-safe-bg); border-color:var(--mode-safe); color:var(--mode-safe); }
+  .mode-banner.live{ background:var(--mode-live-bg); border-color:var(--mode-live); color:var(--mode-live); }
+  .mode-banner b{ font-weight:700; }
 
   /* Stepper */
   .stepper{
@@ -272,14 +296,20 @@
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-      <div class="conn-status"><span class="dot demo" id="statusDot"></span><span id="statusText">Modo demo</span></div>
+      <div class="mode-toggle" id="modeToggle">
+        <button class="mode-btn demo active" id="modeDemoBtn">🧪 Modo prueba</button>
+        <button class="mode-btn live" id="modeLiveBtn">🔴 Modo real</button>
+      </div>
       <button class="btn" id="themeBtn" title="Alternar modo noche" aria-label="Alternar modo noche">
         <svg id="themeIcon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
       <button class="btn" id="settingsBtn">Ajustes de Google</button>
-      <button class="btn primary" id="connectBtn">Conectar con Google</button>
     </div>
   </header>
+
+  <div class="mode-banner demo" id="modeBanner">
+    🧪 <b>Modo prueba</b> — los datos son simulados, nada de esto toca tu Gmail real. Explora sin riesgo.
+  </div>
 
   <div class="stepper" id="stepper">
     <div class="step" data-step="1"><span class="step-num">1</span><span class="step-label">Clasificación</span></div>
@@ -374,6 +404,7 @@
         <div class="final-label">correos marcados como basura, listos para eliminar</div>
       </div>
       <div class="breakdown" id="deleteBreakdown"></div>
+      <div class="mode-banner" id="deleteModeBanner" style="margin-bottom:12px;"></div>
       <button class="btn danger" id="executeDeleteBtn" style="width:100%;justify-content:center;padding:13px;">Eliminar correos ahora</button>
       <div class="delete-progress" id="deleteProgress">
         <div class="drain-track"><div class="drain-fill" id="deleteFill" style="background:var(--delete);"></div></div>
@@ -508,23 +539,37 @@
   ].map(withStatus);
 
   // ---------- Classifier for real Gmail messages ----------
+  const KNOWN_SENDER_CATEGORY = {
+    'linkedin':'social', 'facebook':'social', 'instagram':'social', 'twitter':'social', 'x.com':'social',
+    'tiktok':'social', 'pinterest':'social', 'reddit':'social', 'snapchat':'social',
+    'amazon':'purchases', 'mercado libre':'purchases', 'mercadolibre':'purchases', 'liverpool':'purchases',
+    'shein':'purchases', 'uber eats':'purchases', 'rappi':'purchases', 'didi food':'purchases', 'sears':'purchases',
+    'zara':'ads', 'h&m':'ads', 'adidas':'ads', "domino's":'ads', 'dominos':'ads', 'booking.com':'ads',
+    'best buy':'ads', 'groupon':'ads', "sam's club":'ads', 'sephora':'ads', 'aeromexico':'ads', 'aeroméxico':'ads',
+    'netflix':'ads', 'spotify':'newsletters', 'medium':'newsletters', 'substack':'newsletters',
+    'google drive':'work', 'notion':'work', 'slack':'work', 'coursera':'work', 'zoom':'work', 'udemy':'work',
+    'github':'security', 'paypal':'security', 'apple id':'security'
+  };
   function classifyEmail(from, subject){
     const t = (from + ' ' + subject).toLowerCase();
     const has = (arr)=>arr.some(k=>t.includes(k));
-    if(has(['código de verificación','verification code','inicio de sesión','sign-in','signed in','security alert','alerta de seguridad','contraseña','password reset','restablecer contraseña','two-factor','2fa','verifica tu cuenta','verify your account','cuenta creada','welcome']))
+
+    if(has(['código de verificación','codigo de verificacion','verification code','inicio de sesión','sign-in','signed in','security alert','alerta de seguridad','contraseña','password reset','restablecer contraseña','two-factor','2fa','verifica tu cuenta','verify your account','cuenta creada','confirma tu correo','confirm your email','one-time code','otp']))
       return 'security';
-    if(has(['estado de cuenta','factura','invoice','nómina','payroll','recibo de pago','tarjeta de crédito','banco','bank statement','pago recibido','payment received']))
+    if(has(['estado de cuenta','factura','invoice','nómina','nomina','payroll','recibo de pago','tarjeta de crédito','tarjeta de credito','banco','bank statement','pago recibido','payment received','cargo a tu cuenta','domiciliación','recibo fiscal']))
       return 'finance';
-    if(has(['tu pedido','your order','fue enviado','shipped','tracking','número de guía','confirmación de compra','order confirmed','delivery']))
+    if(has(['tu pedido','your order','fue enviado','shipped','tracking','número de guía','numero de guia','confirmación de compra','confirmacion de compra','order confirmed','delivery','entregado','en camino','ha sido entregado','recibiste tu paquete']))
       return 'purchases';
-    if(has(['linkedin','facebook','instagram','twitter','x.com','tiktok','pinterest','reddit']))
-      return 'social';
-    if(has(['% off','oferta','descuento especial','black friday','solo por hoy','promo','sale ends','última oportunidad']))
-      return 'ads';
-    if(has(['newsletter','digest','resumen semanal','unsubscribe','darse de baja','weekly roundup']))
-      return 'newsletters';
-    if(has(['drive','docs.google','classroom','universidad','university','proyecto','meeting','reunión','slack','teams','coursera','udemy']))
+    if(has(['drive','docs.google','classroom','universidad','university','proyecto','meeting','reunión','reunion','slack','teams','coursera','udemy','tarea','calificación','calificacion','entrega del','syllabus']))
       return 'work';
+    if(has(['newsletter','digest','resumen semanal','unsubscribe','darse de baja','date de baja','weekly roundup','weekly trends','trends','edición de esta semana','edicion de esta semana','lo más leído','boletín','boletin','top stories']))
+      return 'newsletters';
+    if(has(['% off','% de descuento','oferta','descuento','black friday','solo por hoy','promo','sale ends','última oportunidad','ultima oportunidad','envío gratis','envio gratis','cupón','cupon','celebra','fiesta','nuevos descuentos','liquidación','liquidacion','rebajas','hasta agotar existencias','no te lo pierdas']))
+      return 'ads';
+
+    for(const key in KNOWN_SENDER_CATEGORY){
+      if(from.toLowerCase().includes(key)) return KNOWN_SENDER_CATEGORY[key];
+    }
     return 'other';
   }
 
@@ -543,7 +588,10 @@
     accessToken: null,
     tokenClient: null,
     clientId: localStorage.getItem('bc_client_id') || '',
-    lastRoundStats: {deleted:0, rescued:0}
+    lastRoundStats: {deleted:0, rescued:0},
+    loadSession: 0,
+    seenIds: new Set(),
+    liveEmail: null
   };
 
   function escapeHtml(s){
@@ -556,20 +604,25 @@
     state.emails = JSON.parse(JSON.stringify(DEMO_SEED));
     state.loadedCount = DEMO_SEED.length;
     state.estimateTotal = DEMO_ESTIMATE_TOTAL;
+    state.seenIds = new Set(DEMO_SEED.map(e=>e.id));
   }
 
   // ---------- Batch loading ----------
-  async function loadDemoBatch(){
+  async function loadDemoBatch(mySession){
     const remaining = state.estimateTotal - state.loadedCount;
     const batchSize = Math.min(500, Math.max(0, remaining));
     if(batchSize<=0) return;
     const chunk = 25;
     for(let i=0;i<batchSize;i+=chunk){
-      if(state.cancelScan) break;
+      if(state.cancelScan || state.loadSession!==mySession) break;
       const n = Math.min(chunk, batchSize-i);
       for(let j=0;j<n;j++){
         state.loadedCount++;
-        state.emails.push(generateDemoEmail(state.loadedCount));
+        const email = generateDemoEmail(state.loadedCount);
+        if(!state.seenIds.has(email.id)){
+          state.seenIds.add(email.id);
+          state.emails.push(email);
+        }
       }
       setScanProgress((i+n)/batchSize, `Clasificando ${Math.min(i+n,batchSize)}/${batchSize} de este lote…`);
       updateScanCounts();
@@ -577,26 +630,31 @@
     }
   }
 
-  async function loadLiveBatch(){
+  async function loadLiveBatch(mySession){
     const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
     url.searchParams.set('maxResults','500');
     url.searchParams.set('labelIds','INBOX');
     if(state.pageToken) url.searchParams.set('pageToken', state.pageToken);
     const res = await fetch(url, {headers:{'Authorization':'Bearer '+state.accessToken}});
     const data = await res.json();
+    if(state.loadSession!==mySession) return; // una reconexión canceló esta carga
     state.pageToken = data.nextPageToken || null;
     if(data.resultSizeEstimate!=null) state.estimateTotal = data.resultSizeEstimate;
-    const ids = (data.messages||[]).map(m=>m.id);
+    const ids = (data.messages||[]).map(m=>m.id).filter(id=>!state.seenIds.has(id));
     const chunkSize = 20;
     for(let i=0;i<ids.length;i+=chunkSize){
-      if(state.cancelScan) break;
+      if(state.cancelScan || state.loadSession!==mySession) break;
       const chunkIds = ids.slice(i, i+chunkSize);
       const results = await Promise.all(chunkIds.map(id=>
         fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`, {
           headers:{'Authorization':'Bearer '+state.accessToken}
         }).then(r=>r.json()).catch(()=>null)
       ));
+      if(state.loadSession!==mySession) break;
+      let added = 0;
       results.filter(Boolean).forEach(d=>{
+        if(!d.id || state.seenIds.has(d.id)) return;
+        state.seenIds.add(d.id);
         const headers = (d.payload && d.payload.headers) || [];
         const from = (headers.find(h=>h.name==='From')||{}).value || 'Desconocido';
         const subject = (headers.find(h=>h.name==='Subject')||{}).value || '(sin asunto)';
@@ -606,8 +664,9 @@
           category: classifyEmail(from, subject), attachment:false, days,
           size: d.sizeEstimate ? Math.round(d.sizeEstimate/1024)+' KB' : ''
         }));
+        added++;
       });
-      state.loadedCount += chunkIds.length;
+      state.loadedCount += added;
       setScanProgress((i+chunkIds.length)/Math.max(ids.length,1), `Clasificando ${Math.min(i+chunkIds.length,ids.length)}/${ids.length} de este lote…`);
       updateScanCounts();
       await sleep(120);
@@ -616,10 +675,11 @@
 
   async function runBatch(){
     if(state.isScanning) return;
+    const mySession = state.loadSession;
     state.isScanning = true;
     updateScanCounts();
     try{
-      if(state.mode==='live'){ await loadLiveBatch(); } else { await loadDemoBatch(); }
+      if(state.mode==='live'){ await loadLiveBatch(mySession); } else { await loadDemoBatch(mySession); }
     }catch(err){ console.error(err); alert('Hubo un error cargando el lote. Revisa la consola.'); }
     state.isScanning = false;
     renderStage1();
@@ -634,10 +694,46 @@
       stepEl.classList.toggle('active', i===n);
       stepEl.classList.toggle('done', i<n);
     });
+    setModeUI();
     if(n===1) renderStage1();
     if(n===2) renderStage2();
     if(n===3) renderStage3();
   }
+
+  // ---------- Modo prueba / Modo real ----------
+  function setModeUI(){
+    const isLive = state.mode==='live';
+    document.getElementById('modeDemoBtn').classList.toggle('active', !isLive);
+    document.getElementById('modeLiveBtn').classList.toggle('active', isLive);
+    const banner = document.getElementById('modeBanner');
+    banner.className = 'mode-banner ' + (isLive ? 'live' : 'demo');
+    banner.innerHTML = isLive
+      ? `🔴 <b>Modo real</b> — conectado a <b>${escapeHtml(state.liveEmail || 'tu cuenta de Gmail')}</b>. Lo que elimines se va a la papelera de tu Gmail de verdad.`
+      : `🧪 <b>Modo prueba</b> — los datos son simulados, nada de esto toca tu Gmail real. Explora sin riesgo.`;
+  }
+
+  function switchToDemo(){
+    if(state.mode==='live' && state.loadedCount>0){
+      const ok = confirm('Vas a salir del modo real y volver a modo prueba. Se perderá el progreso de clasificación cargado en esta sesión (no se borra nada de tu Gmail real). ¿Continuar?');
+      if(!ok) return;
+    }
+    state.loadSession++;
+    state.cancelScan = true;
+    state.isScanning = false;
+    state.autoScanning = false;
+    state.accessToken = null;
+    state.liveEmail = null;
+    loadDemo();
+    goToStage(1);
+    setTimeout(()=>{ state.cancelScan = false; }, 0);
+  }
+
+  document.getElementById('modeDemoBtn').addEventListener('click', switchToDemo);
+  document.getElementById('modeLiveBtn').addEventListener('click', ()=>{
+    if(state.mode==='live') return;
+    if(!state.clientId){ document.getElementById('modalBackdrop').classList.add('show'); return; }
+    startGoogleAuth();
+  });
 
   // ---------- STAGE 1 ----------
   function updateScanCounts(){
@@ -689,11 +785,13 @@
   document.getElementById('loadBatchBtn').addEventListener('click', ()=>{ if(!state.isScanning) runBatch(); });
   document.getElementById('autoScanBtn').addEventListener('click', async ()=>{
     if(state.autoScanning){ state.cancelScan = true; return; }
+    const mySession = state.loadSession;
     state.autoScanning = true; state.cancelScan = false;
     document.getElementById('autoScanBtn').textContent = '⏹ Detener carga automática';
-    while(!state.cancelScan){
+    while(!state.cancelScan && state.loadSession===mySession){
       const before = state.loadedCount;
       await runBatch();
+      if(state.loadSession!==mySession) break; // se conectó/reconectó una cuenta distinta mientras cargaba
       const doneLoading = state.mode==='live' ? !state.pageToken : state.loadedCount>=state.estimateTotal;
       if(doneLoading) break;
       if(state.loadedCount===before) break;
@@ -830,6 +928,13 @@
     document.getElementById('protectedNote').textContent = `${rescuedCount.toLocaleString('es-MX')} correos rescatados quedarán intactos en tu bandeja.`;
     document.getElementById('executeDeleteBtn').disabled = trashItems.length===0;
 
+    const isLive = state.mode==='live';
+    const dBanner = document.getElementById('deleteModeBanner');
+    dBanner.className = 'mode-banner ' + (isLive ? 'live' : 'demo');
+    dBanner.innerHTML = isLive
+      ? `🔴 Vas a borrar de <b>${escapeHtml(state.liveEmail || 'tu Gmail real')}</b>. Esto es permanente (papelera de Gmail).`
+      : `🧪 Estás en modo prueba — esta eliminación es simulada, no afecta ningún correo real.`;
+
     const byCat = {};
     trashItems.forEach(e=>{ byCat[e.category]=(byCat[e.category]||0)+1; });
     document.getElementById('deleteBreakdown').innerHTML = Object.entries(byCat)
@@ -892,10 +997,17 @@
     modalBackdrop.classList.remove('show');
     startGoogleAuth();
   });
-  document.getElementById('connectBtn').addEventListener('click', ()=>{
-    if(!state.clientId){ modalBackdrop.classList.add('show'); return; }
-    startGoogleAuth();
-  });
+
+  async function fetchLiveEmail(){
+    try{
+      const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+        headers:{'Authorization':'Bearer '+state.accessToken}
+      });
+      const data = await res.json();
+      state.liveEmail = data.emailAddress || null;
+      setModeUI();
+    }catch(err){ console.error(err); }
+  }
 
   function startGoogleAuth(){
     if(!state.clientId) return;
@@ -911,13 +1023,20 @@
           if(resp.error){ console.error(resp); alert('Error al autenticar: '+resp.error); return; }
           state.accessToken = resp.access_token;
           state.mode = 'live';
+          state.loadSession++;      // invalida cualquier lote/autoscan que siga corriendo de antes
+          state.cancelScan = true;  // señal extra para que ese ciclo viejo se detenga en su próxima vuelta
+          state.isScanning = false;
+          state.autoScanning = false;
           state.emails = [];
+          state.seenIds = new Set();
           state.loadedCount = 0;
           state.pageToken = null;
           state.estimateTotal = null;
-          setConnectedUI();
+          state.liveEmail = null;
+          setModeUI();
+          fetchLiveEmail();
           goToStage(1);
-          runBatch();
+          setTimeout(()=>{ state.cancelScan = false; runBatch(); }, 0);
         }
       });
       state.tokenClient.requestAccessToken();
@@ -925,11 +1044,6 @@
       console.error(err);
       alert('No se pudo iniciar la autenticación de Google. Revisa que el Client ID y el origen autorizado sean correctos.');
     }
-  }
-  function setConnectedUI(){
-    document.getElementById('statusDot').className = 'dot live';
-    document.getElementById('statusText').textContent = 'Conectado a Gmail';
-    document.getElementById('connectBtn').textContent = 'Reconectar';
   }
 
   // ---------- Dark mode ----------
