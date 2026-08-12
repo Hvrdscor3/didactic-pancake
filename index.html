@@ -183,6 +183,15 @@
     padding:5px 6px; border-radius:6px; font-size:10.5px; cursor:pointer; font-weight:600;
   }
   .mini-btn.rescue:hover{ border-color:var(--keep); color:var(--keep); background:var(--keep-bg); }
+  .cat-card.clickable{ cursor:pointer; transition:border-color .15s ease, box-shadow .15s ease; }
+  .cat-card.clickable:hover{ border-color:var(--ink); }
+  .cat-card.clickable.filtered{ border-color:var(--ink); box-shadow:0 0 0 1.5px var(--ink); }
+  .active-category-badge{
+    display:none; align-items:center; gap:8px; padding:7px 13px; border-radius:100px;
+    font-size:12.5px; font-weight:600; border:1.5px solid var(--ink); color:var(--ink);
+    background:var(--panel); margin-bottom:12px; cursor:pointer; width:fit-content;
+  }
+  .active-category-badge:hover{ background:var(--bg); }
   .mini-btn.trash:hover{ border-color:var(--delete); color:var(--delete); background:var(--delete-bg); }
 
   details.preview{ margin-top:16px; }
@@ -389,6 +398,7 @@
 
     <div class="panel">
       <p class="panel-title">Revisar correo por correo</p>
+      <div class="active-category-badge" id="activeCategoryBadge"></div>
       <input type="text" class="search-input" id="searchStage2" placeholder="🔍 Buscar por remitente o asunto…">
       <div class="filters" id="statusFilters">
         <div class="chip active" data-status="all">Todos</div>
@@ -605,6 +615,8 @@
     'shein':'purchases', 'uber eats':'purchases', 'rappi':'purchases', 'didi food':'purchases', 'sears':'purchases',
     'walmart':'purchases', 'costco':'purchases', 'ebay':'purchases', 'aliexpress':'purchases', 'shopify':'purchases',
     'fedex':'purchases', 'dhl':'purchases', 'ups':'purchases', 'estafeta':'purchases', 'correos de méxico':'purchases',
+    'epic games':'purchases', 'steam':'purchases', 'playstation':'purchases', 'xbox':'purchases', 'nintendo':'purchases',
+    'app store':'purchases', 'google play':'purchases', 'origin':'purchases', 'ubisoft':'purchases', 'battle.net':'purchases',
     // Publicidad / retail marketing
     'zara':'ads', 'h&m':'ads', 'adidas':'ads', "domino's":'ads', 'dominos':'ads', 'booking.com':'ads',
     'best buy':'ads', 'groupon':'ads', "sam's club":'ads', 'sephora':'ads', 'aeromexico':'ads', 'aeroméxico':'ads',
@@ -643,7 +655,7 @@
       return 'finance';
 
     // 3) Compras personales (transaccional, no promo)
-    if(has(['tu pedido','your order','fue enviado','shipped','tracking','número de guía','numero de guia','confirmación de compra','confirmacion de compra','order confirmed','delivery','entregado','en camino','ha sido entregado','recibiste tu paquete','gracias por tu compra','thank you for your order','recibo de compra','return confirmation','confirmación de devolución','reembolso','refund','out for delivery']))
+    if(has(['tu pedido','your order','fue enviado','shipped','tracking','número de guía','numero de guia','confirmación de compra','confirmacion de compra','order confirmed','delivery','entregado','en camino','ha sido entregado','recibiste tu paquete','gracias por tu compra','thank you for your order','recibo de compra','return confirmation','confirmación de devolución','reembolso','refund','out for delivery','tu recibo','recibo de','your receipt','receipt for','receipt from','here\'s your receipt','purchase receipt','this is a receipt','gracias por tu pedido','order receipt','sales receipt']))
       return 'purchases';
 
     // 4) Trabajo / estudio / colaboración
@@ -695,7 +707,8 @@
     liveEmail: null,
     listRenderLimit: 300,
     searchQuery: '',
-    yearBlock: 'all'
+    yearBlock: 'all',
+    categoryFilter: null
   };
 
   function escapeHtml(s){
@@ -706,6 +719,7 @@
   function loadDemo(){
     state.mode = 'demo';
     state.yearBlock = 'all';
+    state.categoryFilter = null;
     state.emails = JSON.parse(JSON.stringify(DEMO_SEED));
     state.loadedCount = DEMO_SEED.length;
     state.estimateTotal = DEMO_ESTIMATE_TOTAL;
@@ -897,6 +911,7 @@
     state.seenIds = new Set();
     state.loadedCount = 0;
     state.pageToken = null;
+    state.categoryFilter = null;
     state.estimateTotal = state.mode==='demo' ? (DEMO_BLOCK_TOTALS[state.yearBlock] ?? DEMO_ESTIMATE_TOTAL) : null;
     setTimeout(()=>{ state.cancelScan = false; }, 0);
     if(state.mode==='live' && state.yearBlock==='all') fetchInboxLabelInfo();
@@ -973,6 +988,7 @@
   // ---------- STAGE 2 ----------
   function matchesStatusFilter(e){
     if(state.statusFilter!=='all' && e.status!==state.statusFilter) return false;
+    if(state.categoryFilter && e.category!==state.categoryFilter) return false;
     if(state.searchQuery && !(e.sender+' '+e.subject).toLowerCase().includes(state.searchQuery)) return false;
     return true;
   }
@@ -984,7 +1000,8 @@
       const c = counts[cat];
       const importance = CATEGORY_IMPORTANCE[cat];
       const impLabel = importance==='vital' ? 'Vital' : (importance==='review' ? 'Revisar' : 'Prescindible');
-      return `<div class="cat-card">
+      const isFiltered = state.categoryFilter===cat;
+      return `<div class="cat-card clickable ${isFiltered?'filtered':''}" data-cat="${cat}" title="Ver los correos de esta categoría">
         <div class="cat-card-top"><span class="cat-emoji">${meta.emoji}</span><span class="cat-importance ${importance}">${impLabel}</span></div>
         <div class="cat-label">${meta.label}</div>
         <div class="cat-count">${c.total}</div>
@@ -998,6 +1015,36 @@
     }).join('');
   }
 
+  function renderCategoryBadge(){
+    const badge = document.getElementById('activeCategoryBadge');
+    if(state.categoryFilter){
+      const meta = CATEGORY_META[state.categoryFilter];
+      badge.style.display = 'inline-flex';
+      badge.innerHTML = `Mostrando solo: ${meta.emoji} ${meta.label} &nbsp;✕`;
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  // Clic en la tarjeta (fuera de los botones) = filtra la lista de abajo a esa categoría,
+  // reseteando estado/búsqueda para que no se te esconda nada dentro de esa categoría ("refiltrado interno").
+  function filterByCategory(cat){
+    state.categoryFilter = cat;
+    state.statusFilter = 'all';
+    state.searchQuery = '';
+    document.getElementById('searchStage2').value = '';
+    document.querySelectorAll('#statusFilters .chip').forEach(c=>c.classList.toggle('active', c.dataset.status==='all'));
+    state.listRenderLimit = LIST_PAGE_SIZE;
+    renderStage2();
+    document.getElementById('listStage2').scrollIntoView({behavior:'smooth', block:'start'});
+  }
+
+  document.getElementById('activeCategoryBadge').addEventListener('click', ()=>{
+    state.categoryFilter = null;
+    state.listRenderLimit = LIST_PAGE_SIZE;
+    renderStage2();
+  });
+
   function updateStage2Summary(){
     const rescued = state.emails.filter(e=>e.status==='rescued').length;
     const trash = state.emails.filter(e=>e.status==='trash').length;
@@ -1006,6 +1053,7 @@
     document.getElementById('chipTrash').textContent = trash;
     document.getElementById('chipPending').textContent = pending;
     renderCatMatrix2();
+    renderCategoryBadge();
   }
 
   const LIST_PAGE_SIZE = 300;
@@ -1053,12 +1101,16 @@
 
   document.getElementById('catMatrix2').addEventListener('click', e=>{
     const btn = e.target.closest('[data-cataction]');
-    if(!btn) return;
-    const cat = btn.dataset.cat;
-    const action = btn.dataset.cataction;
-    const newStatus = action==='rescue' ? 'rescued' : (action==='pending' ? 'pending' : 'trash');
-    state.emails.forEach(email=>{ if(email.category===cat) email.status = newStatus; });
-    renderStage2();
+    if(btn){
+      const cat = btn.dataset.cat;
+      const action = btn.dataset.cataction;
+      const newStatus = action==='rescue' ? 'rescued' : (action==='pending' ? 'pending' : 'trash');
+      state.emails.forEach(email=>{ if(email.category===cat) email.status = newStatus; });
+      renderStage2();
+      return;
+    }
+    const card = e.target.closest('.cat-card');
+    if(card) filterByCategory(card.dataset.cat);
   });
 
   // Acciones sobre UN correo: actualiza solo esa fila en el DOM en vez de
@@ -1263,6 +1315,7 @@
           state.estimateTotal = null;
           state.liveEmail = null;
           state.yearBlock = 'all';
+          state.categoryFilter = null;
           setModeUI();
           goToStage(1);
           fetchLiveEmail();
