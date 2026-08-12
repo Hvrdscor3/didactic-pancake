@@ -331,9 +331,15 @@
     <div class="panel">
       <p class="panel-title">Cargar y clasificar</p>
       <p class="panel-sub">Trae tu bandeja en lotes de 500 correos. Cada uno se clasifica automáticamente por categoría e importancia (vital vs. prescindible).</p>
-      <div class="scan-top">
+
+      <p class="panel-title" style="font-size:12.5px;margin-top:14px;">Rango (opcional)</p>
+      <p class="panel-sub" style="margin-bottom:8px;">Si tu bandeja es muy grande, es más manejable ir año por año que traer todo de golpe. Cambiar de rango reinicia lo cargado en esta sesión (no borra nada de tu Gmail real).</p>
+      <div class="filters" id="yearBlocks"></div>
+
+      <div class="scan-top" style="margin-top:16px;">
         <div>
           <div class="scan-num"><span id="loadedCount">0</span><span class="scan-sep">/</span><span id="estimateCount">—</span> correos clasificados</div>
+          <div class="scan-status" id="scanRangeLabel" style="margin-top:4px;"></div>
         </div>
         <div class="scan-actions">
           <button class="btn" id="loadBatchBtn">Cargar lote de 500</button>
@@ -490,8 +496,46 @@
     return e;
   }
 
+  // ---------- Bloques por año ----------
+  const CURRENT_YEAR = new Date().getFullYear();
+  const YEAR_BLOCK_YEARS = [CURRENT_YEAR, CURRENT_YEAR-1, CURRENT_YEAR-2, CURRENT_YEAR-3, CURRENT_YEAR-4];
+  const EARLIEST_BLOCK_YEAR = YEAR_BLOCK_YEARS[YEAR_BLOCK_YEARS.length-1];
+
+  function buildDateQuery(block){
+    if(!block || block==='all') return null;
+    if(block==='older') return `before:${EARLIEST_BLOCK_YEAR}/01/01`;
+    return `after:${block}/01/01 before:${Number(block)+1}/01/01`;
+  }
+
+  function blockLabel(block){
+    if(block==='all') return 'Todo (conteo exacto)';
+    if(block==='older') return `Antes de ${EARLIEST_BLOCK_YEAR}`;
+    return block===CURRENT_YEAR ? `${block} (este año)` : String(block);
+  }
+
+  function daysRangeForBlock(block){
+    const now = new Date();
+    if(!block || block==='all') return [0,90];
+    if(block==='older'){
+      const endDate = new Date(EARLIEST_BLOCK_YEAR,0,1);
+      const startDate = new Date(EARLIEST_BLOCK_YEAR-6,0,1);
+      return [Math.floor((now-endDate)/86400000), Math.floor((now-startDate)/86400000)];
+    }
+    const year = Number(block);
+    const startOfYear = new Date(year,0,1);
+    const endOfYear = year===CURRENT_YEAR ? now : new Date(year+1,0,1);
+    return [Math.max(0,Math.floor((now-endOfYear)/86400000)), Math.floor((now-startOfYear)/86400000)];
+  }
+
   // ---------- Demo data generation (simula bandejas de 1000+) ----------
   const DEMO_ESTIMATE_TOTAL = 1240;
+  const DEMO_BLOCK_TOTALS = {}; // se llena abajo, aproxima cuántos correos "habría" por año en la demo
+  (function(){
+    const weights = [180,260,230,210,190]; // uno por cada año en YEAR_BLOCK_YEARS
+    YEAR_BLOCK_YEARS.forEach((y,i)=>{ DEMO_BLOCK_TOTALS[y] = weights[i]; });
+    DEMO_BLOCK_TOTALS['older'] = 170;
+    DEMO_BLOCK_TOTALS['all'] = DEMO_ESTIMATE_TOTAL;
+  })();
   const CATEGORY_WEIGHTS = [
     ['ads', 45], ['newsletters', 15], ['social', 10], ['purchases', 10],
     ['work', 8], ['personal', 5], ['finance', 4], ['security', 2], ['other', 1]
@@ -524,12 +568,14 @@
     return CATEGORY_CUM.find(([,acc])=>r<=acc)[0];
   }
   function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
-  function generateDemoEmail(idx){
+  function generateDemoEmail(idx, block){
     const category = weightedRandomCategory();
+    const [minD,maxD] = daysRangeForBlock(block);
+    const days = minD + Math.floor(Math.random()*Math.max(1,(maxD-minD)));
     return withStatus({
       id:'demo-'+idx, sender: pick(SENDER_POOLS[category]), subject: pick(SUBJECT_POOLS[category]),
       category, attachment: Math.random() < (category==='finance'||category==='work' ? 0.35 : 0.08),
-      days: Math.floor(Math.random()*90), size: Math.round(4+Math.random()*300)+' KB'
+      days, size: Math.round(4+Math.random()*300)+' KB'
     });
   }
   const sleep = ms => new Promise(r=>setTimeout(r, ms));
@@ -648,7 +694,8 @@
     seenIds: new Set(),
     liveEmail: null,
     listRenderLimit: 300,
-    searchQuery: ''
+    searchQuery: '',
+    yearBlock: 'all'
   };
 
   function escapeHtml(s){
@@ -658,6 +705,7 @@
   // ---------- Init loaders ----------
   function loadDemo(){
     state.mode = 'demo';
+    state.yearBlock = 'all';
     state.emails = JSON.parse(JSON.stringify(DEMO_SEED));
     state.loadedCount = DEMO_SEED.length;
     state.estimateTotal = DEMO_ESTIMATE_TOTAL;
@@ -675,7 +723,7 @@
       const n = Math.min(chunk, batchSize-i);
       for(let j=0;j<n;j++){
         state.loadedCount++;
-        const email = generateDemoEmail(state.loadedCount);
+        const email = generateDemoEmail(state.loadedCount, state.yearBlock);
         if(!state.seenIds.has(email.id)){
           state.seenIds.add(email.id);
           state.emails.push(email);
@@ -691,6 +739,8 @@
     const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
     url.searchParams.set('maxResults','500');
     url.searchParams.set('labelIds','INBOX');
+    const q = buildDateQuery(state.yearBlock);
+    if(q) url.searchParams.set('q', q);
     if(state.pageToken) url.searchParams.set('pageToken', state.pageToken);
     const res = await fetch(url, {headers:{'Authorization':'Bearer '+state.accessToken}});
     const data = await res.json();
@@ -799,6 +849,12 @@
     const doneLoading = state.mode==='live' ? (!state.pageToken && state.loadedCount>0) : state.loadedCount>=state.estimateTotal;
     document.getElementById('loadBatchBtn').disabled = state.isScanning || doneLoading;
     document.getElementById('autoScanBtn').disabled = (state.isScanning && !state.autoScanning) || (doneLoading && !state.autoScanning);
+    const rangeLabel = document.getElementById('scanRangeLabel');
+    if(rangeLabel){
+      rangeLabel.textContent = state.yearBlock==='all'
+        ? 'Rango: todo el inbox'
+        : `Rango: ${blockLabel(state.yearBlock)}${state.mode==='live' ? ' (conteo aproximado para este rango)' : ''}`;
+    }
   }
   function setScanProgress(fraction, text){
     document.getElementById('scanProgress').style.display = 'block';
@@ -816,8 +872,46 @@
     return counts;
   }
 
+  // ---------- Bloques por año (UI) ----------
+  function renderYearBlocks(){
+    const wrap = document.getElementById('yearBlocks');
+    const blocks = ['all', ...YEAR_BLOCK_YEARS, 'older'];
+    wrap.innerHTML = blocks.map(b=>{
+      const isActive = String(b)===String(state.yearBlock);
+      return `<div class="chip ${isActive?'active':''}" data-block="${b}">${blockLabel(b)}</div>`;
+    }).join('');
+  }
+
+  function switchYearBlock(block){
+    if(String(block)===String(state.yearBlock)) return;
+    if(state.loadedCount>0){
+      const ok = confirm(`Vas a cambiar de rango a "${blockLabel(block)}". Se perderá lo cargado en el rango actual para esta sesión (no se borra nada de tu Gmail real). ¿Continuar?`);
+      if(!ok) return;
+    }
+    state.yearBlock = (block==='all' || block==='older') ? block : Number(block);
+    state.loadSession++;
+    state.cancelScan = true;
+    state.isScanning = false;
+    state.autoScanning = false;
+    state.emails = [];
+    state.seenIds = new Set();
+    state.loadedCount = 0;
+    state.pageToken = null;
+    state.estimateTotal = state.mode==='demo' ? (DEMO_BLOCK_TOTALS[state.yearBlock] ?? DEMO_ESTIMATE_TOTAL) : null;
+    setTimeout(()=>{ state.cancelScan = false; }, 0);
+    if(state.mode==='live' && state.yearBlock==='all') fetchInboxLabelInfo();
+    renderStage1();
+  }
+
+  document.getElementById('yearBlocks').addEventListener('click', e=>{
+    const chip = e.target.closest('.chip');
+    if(!chip) return;
+    switchYearBlock(chip.dataset.block);
+  });
+
   function renderStage1(){
     updateScanCounts();
+    renderYearBlocks();
     document.getElementById('toStage2Btn').disabled = state.loadedCount===0;
     const counts = catCounts();
     const grid = document.getElementById('catMatrix1');
@@ -1168,6 +1262,7 @@
           state.pageToken = null;
           state.estimateTotal = null;
           state.liveEmail = null;
+          state.yearBlock = 'all';
           setModeUI();
           goToStage(1);
           fetchLiveEmail();
