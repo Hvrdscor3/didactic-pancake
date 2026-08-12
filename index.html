@@ -540,36 +540,81 @@
 
   // ---------- Classifier for real Gmail messages ----------
   const KNOWN_SENDER_CATEGORY = {
+    // Redes / comunidad
     'linkedin':'social', 'facebook':'social', 'instagram':'social', 'twitter':'social', 'x.com':'social',
-    'tiktok':'social', 'pinterest':'social', 'reddit':'social', 'snapchat':'social',
+    'tiktok':'social', 'pinterest':'social', 'reddit':'social', 'snapchat':'social', 'discord':'social',
+    'twitch':'social', 'youtube':'social', 'meetup':'social', 'quora':'social', 'nextdoor':'social',
+    // Compras / entregas
     'amazon':'purchases', 'mercado libre':'purchases', 'mercadolibre':'purchases', 'liverpool':'purchases',
     'shein':'purchases', 'uber eats':'purchases', 'rappi':'purchases', 'didi food':'purchases', 'sears':'purchases',
+    'walmart':'purchases', 'costco':'purchases', 'ebay':'purchases', 'aliexpress':'purchases', 'shopify':'purchases',
+    'fedex':'purchases', 'dhl':'purchases', 'ups':'purchases', 'estafeta':'purchases', 'correos de méxico':'purchases',
+    // Publicidad / retail marketing
     'zara':'ads', 'h&m':'ads', 'adidas':'ads', "domino's":'ads', 'dominos':'ads', 'booking.com':'ads',
     'best buy':'ads', 'groupon':'ads', "sam's club":'ads', 'sephora':'ads', 'aeromexico':'ads', 'aeroméxico':'ads',
+    'volaris':'ads', 'expedia':'ads', 'trivago':'ads', 'airbnb':'ads', 'temu':'ads', 'nike':'ads', 'coppel':'ads',
+    // Newsletters / lectura
     'netflix':'ads', 'spotify':'newsletters', 'medium':'newsletters', 'substack':'newsletters',
+    'the hustle':'newsletters', 'morning brew':'newsletters', 'pocket':'newsletters',
+    // Trabajo / colaboración
     'google drive':'work', 'notion':'work', 'slack':'work', 'coursera':'work', 'zoom':'work', 'udemy':'work',
-    'github':'security', 'paypal':'security', 'apple id':'security'
+    'trello':'work', 'asana':'work', 'jira':'work', 'atlassian':'work', 'confluence':'work', 'monday.com':'work',
+    'basecamp':'work', 'calendly':'work', 'figma':'work', 'miro':'work', 'docusign':'work', 'linktree':'work',
+    'google calendar':'work', 'microsoft teams':'work', 'canva':'work',
+    // Seguridad
+    'github':'security', 'paypal':'security', 'apple id':'security', 'okta':'security', 'lastpass':'security',
+    '1password':'security', 'bitwarden':'security',
+    // Finanzas / suscripciones
+    'pcloud':'finance', 'dropbox':'finance', 'icloud':'finance', 'adobe':'finance',
+    'nordvpn':'finance', 'expressvpn':'finance', 'stripe':'finance', 'patreon':'finance'
   };
+
+  // Patrones de remitente típicos de correos automáticos/masivos (no necesariamente publicidad,
+  // pero casi siempre prescindibles si ninguna otra regla ya los marcó como importantes).
+  const GENERIC_NOTIFICATION_SENDER = ['no-reply','noreply','no_reply','notification','notifications','notificaciones','mailer','newsletter@','news@','marketing@','updates@','alerts@','info@','hello@','do-not-reply'];
+
   function classifyEmail(from, subject){
     const t = (from + ' ' + subject).toLowerCase();
+    const fromLower = from.toLowerCase();
     const has = (arr)=>arr.some(k=>t.includes(k));
 
-    if(has(['código de verificación','codigo de verificacion','verification code','inicio de sesión','sign-in','signed in','security alert','alerta de seguridad','contraseña','password reset','restablecer contraseña','two-factor','2fa','verifica tu cuenta','verify your account','cuenta creada','confirma tu correo','confirm your email','one-time code','otp']))
+    // 1) Seguridad y accesos — siempre vital, se revisa primero
+    if(has(['código de verificación','codigo de verificacion','verification code','inicio de sesión','sign-in','signed in','security alert','alerta de seguridad','actividad inusual','unusual activity','nuevo dispositivo','new device','contraseña','password reset','restablecer contraseña','recuperación de cuenta','account recovery','two-factor','2fa','verifica tu cuenta','verify your account','cuenta creada','confirma tu correo','confirm your email','confirma que eres tú','one-time code','otp','código de acceso','codigo de acceso']))
       return 'security';
-    if(has(['estado de cuenta','factura','invoice','nómina','nomina','payroll','recibo de pago','tarjeta de crédito','tarjeta de credito','banco','bank statement','pago recibido','payment received','cargo a tu cuenta','domiciliación','recibo fiscal']))
+
+    // 2) Finanzas / cobros / suscripciones
+    if(has(['estado de cuenta','factura','invoice','nómina','nomina','payroll','recibo de pago','tarjeta de crédito','tarjeta de credito','banco','bank statement','pago recibido','payment received','cargo a tu cuenta','domiciliación','recibo fiscal','billing','billing information','update your billing','update payment','payment method','método de pago','metodo de pago','información de pago','informacion de pago','subscription','suscripción','suscripcion','renewal','renovación','renovacion','auto-renew','tarjeta vencida','tarjeta venció','payment failed','pago fallido','past due','second notice','segundo aviso','final notice','último aviso','ultimo aviso','your card','tu tarjeta','expiring soon','plan premium','tu plan','upgrade your plan']))
       return 'finance';
-    if(has(['tu pedido','your order','fue enviado','shipped','tracking','número de guía','numero de guia','confirmación de compra','confirmacion de compra','order confirmed','delivery','entregado','en camino','ha sido entregado','recibiste tu paquete']))
+
+    // 3) Compras personales (transaccional, no promo)
+    if(has(['tu pedido','your order','fue enviado','shipped','tracking','número de guía','numero de guia','confirmación de compra','confirmacion de compra','order confirmed','delivery','entregado','en camino','ha sido entregado','recibiste tu paquete','gracias por tu compra','thank you for your order','recibo de compra','return confirmation','confirmación de devolución','reembolso','refund','out for delivery']))
       return 'purchases';
-    if(has(['drive','docs.google','classroom','universidad','university','proyecto','meeting','reunión','reunion','slack','teams','coursera','udemy','tarea','calificación','calificacion','entrega del','syllabus']))
+
+    // 4) Trabajo / estudio / colaboración
+    if(has(['drive','docs.google','classroom','universidad','university','proyecto','meeting','reunión','reunion','teams','tarea','calificación','calificacion','entrega del','syllabus','pull request','merge request','commit','build failed','build succeeded','deployment','asignó','assigned to you','invitación a evento','event invitation','has sido agregado al equipo','added you to','comentó en el documento','commented on the document']))
       return 'work';
-    if(has(['newsletter','digest','resumen semanal','unsubscribe','darse de baja','date de baja','weekly roundup','weekly trends','trends','edición de esta semana','edicion de esta semana','lo más leído','boletín','boletin','top stories']))
+
+    // 5) Redes sociales / notificaciones de interacción social
+    if(has(['te mencionó','mentioned you','comentó tu','comentó en tu','commented on your','le gustó tu','liked your','new follower','nuevo seguidor','friend request','solicitud de amistad','te etiquetó','tagged you','vio tu perfil','viewed your profile','tienes nuevas notificaciones','new notifications','reaccionó a tu','reacted to your']))
+      return 'social';
+
+    // 6) Newsletters / boletines editoriales
+    if(has(['newsletter','digest','resumen semanal','unsubscribe','darse de baja','date de baja','weekly roundup','weekly trends','trends','edición de esta semana','edicion de esta semana','lo más leído','boletín','boletin','top stories','this week in','daily brief','reading list','issue #','edición #','edicion #','top 5','top 10']))
       return 'newsletters';
-    if(has(['% off','% de descuento','oferta','descuento','black friday','solo por hoy','promo','sale ends','última oportunidad','ultima oportunidad','envío gratis','envio gratis','cupón','cupon','celebra','fiesta','nuevos descuentos','liquidación','liquidacion','rebajas','hasta agotar existencias','no te lo pierdas']))
+
+    // 7) Publicidad / promociones
+    if(has(['% off','% de descuento','oferta','descuento','black friday','cyber monday','solo por hoy','promo','sale ends','última oportunidad','ultima oportunidad','envío gratis','envio gratis','cupón','cupon','coupon code','use code','celebra','fiesta','nuevos descuentos','liquidación','liquidacion','rebajas','hasta agotar existencias','no te lo pierdas','flash sale','limited time','oferta exclusiva','exclusive offer','members only','new arrivals','shop now','compra ahora','last chance','today only','save up to','clearance','aprovecha','regalo especial','giveaway','sorteo','concurso']))
       return 'ads';
 
+    // 8) Remitentes conocidos (respaldo cuando el asunto no da pistas)
     for(const key in KNOWN_SENDER_CATEGORY){
-      if(from.toLowerCase().includes(key)) return KNOWN_SENDER_CATEGORY[key];
+      if(fromLower.includes(key)) return KNOWN_SENDER_CATEGORY[key];
     }
+
+    // 9) Última red: patrón típico de correo masivo/automático sin nada arriba que lo salve →
+    // se manda a "Redes sociales" (categoría prescindible) en vez de dejarlo en revisión manual.
+    if(GENERIC_NOTIFICATION_SENDER.some(p=>fromLower.includes(p))) return 'social';
+
     return 'other';
   }
 
@@ -639,7 +684,7 @@
     const data = await res.json();
     if(state.loadSession!==mySession) return; // una reconexión canceló esta carga
     state.pageToken = data.nextPageToken || null;
-    if(data.resultSizeEstimate!=null) state.estimateTotal = data.resultSizeEstimate;
+    if(state.estimateTotal==null && data.resultSizeEstimate!=null) state.estimateTotal = data.resultSizeEstimate;
     const ids = (data.messages||[]).map(m=>m.id).filter(id=>!state.seenIds.has(id));
     const chunkSize = 20;
     for(let i=0;i<ids.length;i+=chunkSize){
@@ -783,8 +828,9 @@
   }
 
   document.getElementById('loadBatchBtn').addEventListener('click', ()=>{ if(!state.isScanning) runBatch(); });
-  document.getElementById('autoScanBtn').addEventListener('click', async ()=>{
-    if(state.autoScanning){ state.cancelScan = true; return; }
+
+  async function startFullAutoScan(){
+    if(state.autoScanning) return;
     const mySession = state.loadSession;
     state.autoScanning = true; state.cancelScan = false;
     document.getElementById('autoScanBtn').textContent = '⏹ Detener carga automática';
@@ -799,6 +845,11 @@
     state.autoScanning = false;
     document.getElementById('autoScanBtn').textContent = 'Cargar todo automáticamente';
     updateScanCounts();
+  }
+
+  document.getElementById('autoScanBtn').addEventListener('click', ()=>{
+    if(state.autoScanning){ state.cancelScan = true; return; }
+    startFullAutoScan();
   });
   document.getElementById('toStage2Btn').addEventListener('click', ()=>goToStage(2));
 
@@ -1009,6 +1060,18 @@
     }catch(err){ console.error(err); }
   }
 
+  // Conteo EXACTO de la bandeja (mismo número que Gmail muestra en su barra lateral),
+  // en vez de la "estimación" aproximada que da la lista de mensajes.
+  async function fetchInboxLabelInfo(){
+    try{
+      const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/labels/INBOX', {
+        headers:{'Authorization':'Bearer '+state.accessToken}
+      });
+      const data = await res.json();
+      if(data.messagesTotal!=null){ state.estimateTotal = data.messagesTotal; updateScanCounts(); }
+    }catch(err){ console.error(err); }
+  }
+
   function startGoogleAuth(){
     if(!state.clientId) return;
     if(typeof google === 'undefined' || !google.accounts){
@@ -1019,11 +1082,12 @@
       state.tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: state.clientId,
         scope: 'https://www.googleapis.com/auth/gmail.modify',
-        callback: (resp)=>{
+        callback: async (resp)=>{
           if(resp.error){ console.error(resp); alert('Error al autenticar: '+resp.error); return; }
           state.accessToken = resp.access_token;
           state.mode = 'live';
           state.loadSession++;      // invalida cualquier lote/autoscan que siga corriendo de antes
+          const mySession = state.loadSession;
           state.cancelScan = true;  // señal extra para que ese ciclo viejo se detenga en su próxima vuelta
           state.isScanning = false;
           state.autoScanning = false;
@@ -1034,9 +1098,12 @@
           state.estimateTotal = null;
           state.liveEmail = null;
           setModeUI();
-          fetchLiveEmail();
           goToStage(1);
-          setTimeout(()=>{ state.cancelScan = false; runBatch(); }, 0);
+          fetchLiveEmail();
+          await fetchInboxLabelInfo(); // obtiene el total exacto ANTES de empezar a cargar
+          if(state.loadSession!==mySession) return; // se reconectó de nuevo mientras tanto
+          state.cancelScan = false;
+          startFullAutoScan(); // trae TODA la bandeja sola, sin pedir más clics
         }
       });
       state.tokenClient.requestAccessToken();
