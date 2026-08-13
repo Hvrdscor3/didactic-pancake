@@ -719,6 +719,7 @@
     'basecamp':'work', 'calendly':'work', 'figma':'work', 'miro':'work', 'docusign':'work', 'linktree':'work',
     'google calendar':'work', 'microsoft teams':'work', 'canva':'work',
     'fiverr':'work', 'upwork':'work', 'freelancer.com':'work', 'workana':'work', 'toptal':'work',
+    'clientes bbva':'work', 'payhip':'work',
     // Seguridad
     'github':'security', 'paypal':'security', 'apple id':'security', 'okta':'security', 'lastpass':'security',
     '1password':'security', 'bitwarden':'security',
@@ -749,7 +750,7 @@
       return 'purchases';
 
     // 4) Trabajo / estudio / colaboración
-    if(has(['drive','docs.google','classroom','universidad','university','proyecto','meeting','reunión','reunion','teams','tarea','calificación','calificacion','entrega del','syllabus','pull request','merge request','commit','build failed','build succeeded','deployment','asignó','assigned to you','invitación a evento','event invitation','has sido agregado al equipo','added you to','comentó en el documento','commented on the document','new order','nuevo pedido de trabajo','order completed','has been delivered','you\'ve been hired','client has accepted','gig order','new message from buyer','new message from seller','withdraw your earnings','ganancias disponibles']))
+    if(has(['drive','docs.google','classroom','universidad','university','proyecto','meeting','reunión','reunion','teams','tarea','calificación','calificacion','entrega del','syllabus','pull request','merge request','commit','build failed','build succeeded','deployment','asignó','assigned to you','invitación a evento','event invitation','has sido agregado al equipo','added you to','comentó en el documento','commented on the document','new order','nuevo pedido de trabajo','order completed','has been delivered','you\'ve been hired','client has accepted','gig order','new message from buyer','new message from seller','withdraw your earnings','ganancias disponibles','realizaste un apartado','apartado en tu cuenta',"you've sold an item",'you have sold an item','new sale']))
       return 'work';
 
     // 5) Redes sociales / notificaciones de interacción social
@@ -838,7 +839,7 @@
           state.emails.push(email);
         }
       }
-      setScanProgress((i+n)/batchSize, `Clasificando ${Math.min(i+n,batchSize)}/${batchSize} de este lote…`);
+      setScanProgress((i+n)/batchSize, `Lote ${state.batchNumber+1} — clasificando ${Math.min(i+n,batchSize)}/${batchSize}…`);
       updateScanCounts();
       await sleep(30);
     }
@@ -883,7 +884,7 @@
         added++;
       });
       state.loadedCount += added;
-      setScanProgress((i+chunkIds.length)/Math.max(ids.length,1), `Clasificando ${Math.min(i+chunkIds.length,ids.length)}/${ids.length} de este lote…`);
+      setScanProgress((i+chunkIds.length)/Math.max(ids.length,1), `Lote ${state.batchNumber+1} — clasificando ${Math.min(i+chunkIds.length,ids.length)}/${ids.length}…`);
       updateScanCounts();
       await sleep(120);
     }
@@ -925,7 +926,7 @@
       added++;
     });
     state.loadedCount += added;
-    setScanProgress(1, `Clasificando ${state.loadedCount.toLocaleString('es-MX')} correos…`);
+    setScanProgress(1, `Lote ${state.batchNumber+1} — clasificando ${state.loadedCount.toLocaleString('es-MX')} correos…`);
     updateScanCounts();
     await sleep(80);
   }
@@ -1005,9 +1006,17 @@
   });
 
   // ---------- STAGE 1 ----------
+  function totalBatchesEstimate(){
+    return state.estimateTotal!=null ? Math.max(1, Math.ceil(state.estimateTotal/500)) : null;
+  }
   function updateScanCounts(){
-    document.getElementById('batchNumber').textContent = state.batchNumber;
-    document.getElementById('totalLoadedLabel').textContent = `${state.loadedCount.toLocaleString('es-MX')} correos cargados en total`;
+    const totalBatches = totalBatchesEstimate();
+    document.getElementById('batchNumber').textContent = totalBatches!=null
+      ? `${state.batchNumber} de ~${totalBatches}`
+      : state.batchNumber;
+    document.getElementById('totalLoadedLabel').textContent = state.estimateTotal!=null
+      ? `${state.loadedCount.toLocaleString('es-MX')} de ~${state.estimateTotal.toLocaleString('es-MX')} correos cargados`
+      : `${state.loadedCount.toLocaleString('es-MX')} correos cargados en total`;
     const doneLoading = state.mode==='live' ? (!state.pageToken && state.loadedCount>0) : state.loadedCount>=state.estimateTotal;
     document.getElementById('loadBatchBtn').disabled = state.isScanning || doneLoading;
     document.getElementById('autoScanBtn').disabled = (state.isScanning && !state.autoScanning) || (doneLoading && !state.autoScanning);
