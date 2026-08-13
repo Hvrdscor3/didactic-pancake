@@ -4,7 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bandeja Cero — Limpiador de mails</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://alcdn.msauth.net/browser/3.7.1/js/msal-browser.min.js" async defer></script>
 <style>
   :root{
     --bg: #FAFAF7;
@@ -33,6 +37,11 @@
 
     --mode-safe: #3E6DB5;   --mode-safe-bg: #EAEFF7;
     --mode-live: #B5573F;   --mode-live-bg: #F6ECE9;
+
+    --grad-a: #5B7FE0;
+    --grad-b: #8A5FD1;
+    --panel-glass: rgba(255,255,255,.72);
+    --glow-opacity: .14;
   }
   [data-theme="dark"]{
     --bg: #171613;
@@ -59,6 +68,11 @@
 
     --mode-safe: #8CACDD;   --mode-safe-bg: #202A38;
     --mode-live: #E08468;   --mode-live-bg: #33241E;
+
+    --grad-a: #6C93FF;
+    --grad-b: #A78BFA;
+    --panel-glass: rgba(31,30,26,.6);
+    --glow-opacity: .30;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
@@ -68,49 +82,78 @@
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     -webkit-font-smoothing:antialiased;
     min-height:100vh;
+    position:relative;
+    overflow-x:hidden;
     transition:background .2s ease, color .2s ease;
   }
-  .display{ font-family: 'Space Grotesk', 'Inter', sans-serif; letter-spacing:-0.02em; }
-  .app{ max-width:960px; margin:0 auto; padding:32px 24px 90px; }
+  body::before{
+    content:''; position:fixed; top:-260px; left:50%; transform:translateX(-50%);
+    width:1100px; height:680px; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(circle at 30% 35%, var(--grad-a), transparent 60%),
+      radial-gradient(circle at 72% 60%, var(--grad-b), transparent 60%);
+    opacity:var(--glow-opacity);
+    filter:blur(70px);
+  }
+  .app{ position:relative; z-index:1; }
+  .display{ font-family: 'Space Grotesk', 'Inter', sans-serif; letter-spacing:-0.01em; }
+  .app{ max-width:1180px; margin:0 auto; padding:40px clamp(20px,4vw,56px) 100px; }
+  @media (min-width:1500px){ .app{ max-width:1320px; } }
 
   header.top{
     display:flex; align-items:flex-start; justify-content:space-between;
-    gap:24px; margin-bottom:24px; flex-wrap:wrap;
+    gap:24px; margin-bottom:30px; flex-wrap:wrap;
   }
-  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand{ display:flex; align-items:center; gap:14px; }
   .brand-mark{
-    width:34px;height:34px; border-radius:8px; background:var(--ink);
-    display:flex;align-items:center;justify-content:center; flex-shrink:0;
+    width:44px;height:44px; border-radius:13px;
+    background:linear-gradient(135deg, var(--grad-a), var(--grad-b));
+    display:flex;align-items:center;justify-content:center; flex-shrink:0; position:relative;
+    box-shadow:0 6px 18px -6px var(--grad-b);
   }
-  .brand-mark svg{width:18px;height:18px;stroke:var(--bg);}
-  .brand h1{ font-size:19px; margin:0; font-weight:600; }
-  .brand p{ margin:0; font-size:12px; color:var(--ink-soft); }
+  .brand-mark::after{
+    content:''; position:absolute; inset:0; border-radius:13px;
+    border:1.5px dashed rgba(255,255,255,.35);
+    margin:3px;
+  }
+  .brand-mark svg{width:21px;height:21px;stroke:#fff; position:relative; z-index:1;}
+  .brand h1{ font-family:'Space Grotesk','Inter',sans-serif; font-size:23px; margin:0; font-weight:600; letter-spacing:-0.01em; }
+  .brand p{ margin:2px 0 0; font-size:12.5px; color:var(--ink-soft); }
   .conn-status{ display:flex; align-items:center; gap:10px; font-size:13px; color:var(--ink-soft); }
 
   .btn{
     border:1px solid var(--line); background:var(--panel); color:var(--ink);
-    padding:9px 14px; border-radius:8px; font-size:13px; font-weight:500;
+    padding:10px 16px; border-radius:9px; font-size:13.5px; font-weight:600;
     cursor:pointer; display:inline-flex; align-items:center; gap:8px;
-    transition:border-color .15s ease, background .15s ease, opacity .15s ease;
+    transition:border-color .15s ease, background .15s ease, opacity .15s ease, transform .12s ease, box-shadow .15s ease;
   }
-  .btn:hover{border-color:#C7C3B8;}
-  .btn.primary{ background:var(--ink); color:var(--bg); border-color:var(--ink); }
-  .btn.primary:hover{opacity:.88;}
-  .btn.danger{ background:var(--delete); color:#fff; border-color:var(--delete); font-weight:600; }
-  .btn.danger:hover{opacity:.88;}
-  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .btn:hover{border-color:#C7C3B8; transform:translateY(-1px);}
+  .btn:active{transform:translateY(0);}
+  .btn.primary{
+    background:linear-gradient(135deg, var(--grad-a), var(--grad-b));
+    color:#fff; border:none; border-radius:999px; font-weight:700;
+    box-shadow:0 8px 20px -8px var(--grad-b);
+  }
+  .btn.primary:hover{opacity:.92;}
+  .btn.danger{
+    background:var(--delete); color:#fff; border:none; border-radius:999px; font-weight:700;
+    box-shadow:0 8px 20px -10px var(--delete);
+  }
+  .btn.danger:hover{opacity:.9;}
+  .btn:disabled{opacity:.4;cursor:not-allowed; transform:none;}
 
   .mode-toggle{
-    display:flex; border:1.5px solid var(--line); border-radius:9px; overflow:hidden;
+    display:flex; border:1.5px solid var(--line); border-radius:999px; overflow:hidden;
+    padding:3px; gap:2px; background:var(--panel-glass); backdrop-filter:blur(10px);
   }
   .mode-btn{
-    border:none; background:var(--panel); color:var(--ink-soft);
-    padding:9px 14px; font-size:12.5px; font-weight:600; cursor:pointer;
-    display:flex; align-items:center; gap:6px; transition:background .15s ease, color .15s ease;
+    border:none; background:transparent; color:var(--ink-soft); border-radius:999px;
+    padding:8px 15px; font-size:12.5px; font-weight:700; cursor:pointer;
+    display:flex; align-items:center; gap:6px; transition:background .2s ease, color .2s ease, box-shadow .2s ease;
   }
   .mode-btn:not(.active):hover{ background:var(--bg); }
-  .mode-btn.demo.active{ background:var(--mode-safe); color:#fff; }
-  .mode-btn.live.active{ background:var(--mode-live); color:#fff; }
+  .mode-btn.demo.active{ background:linear-gradient(135deg, var(--mode-safe), var(--grad-a)); color:#fff; box-shadow:0 4px 14px -6px var(--grad-a); }
+  .mode-btn.live.active{ background:linear-gradient(135deg, var(--mode-live), var(--delete)); color:#fff; box-shadow:0 4px 14px -6px var(--mode-live); }
 
   .mode-banner{
     display:flex; align-items:center; gap:9px; flex-wrap:wrap;
@@ -123,31 +166,43 @@
 
   /* Stepper */
   .stepper{
-    display:flex; align-items:center; gap:8px; margin-bottom:26px;
+    display:flex; align-items:center; gap:10px; margin-bottom:28px;
+    background:var(--panel-glass); border:1px solid var(--line); border-radius:18px;
+    padding:14px 22px;
+    box-shadow:0 1px 2px rgba(20,18,14,.03);
+    backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
   }
   .step{
-    display:flex; align-items:center; gap:8px;
-    font-size:13px; color:var(--ink-soft); font-weight:500;
+    display:flex; align-items:center; gap:10px;
+    font-size:13.5px; color:var(--ink-soft); font-weight:600;
   }
   .step-num{
-    width:24px;height:24px; border-radius:50%; border:1.5px solid var(--line);
+    width:28px;height:28px; border-radius:50%; border:1.5px solid var(--line);
     display:flex; align-items:center; justify-content:center;
-    font-family:var(--mono); font-size:11.5px; flex-shrink:0;
+    font-family:var(--mono); font-size:12.5px; flex-shrink:0;
+    transition:background .2s ease, border-color .2s ease, color .2s ease;
   }
   .step.active{ color:var(--ink); }
-  .step.active .step-num{ background:var(--ink); border-color:var(--ink); color:var(--bg); }
+  .step.active .step-num{ background:linear-gradient(135deg, var(--grad-a), var(--grad-b)); border-color:transparent; color:#fff; }
   .step.done .step-num{ background:var(--keep); border-color:var(--keep); color:#fff; }
-  .step-line{ flex:1; height:1px; background:var(--line); min-width:16px; max-width:60px; }
+  .step-line{ flex:1; height:2px; background:var(--line); min-width:16px; border-radius:2px; overflow:hidden; position:relative; }
+  .step-line::after{
+    content:''; position:absolute; inset:0; background:var(--keep); border-radius:2px;
+    transform:scaleX(0); transform-origin:left; transition:transform .3s ease;
+  }
+  .step-line.filled::after{ transform:scaleX(1); }
 
   .stage{ display:none; }
   .stage.active{ display:block; }
 
   .panel{
-    background:var(--panel); border:1px solid var(--line); border-radius:14px;
-    padding:20px 22px; margin-bottom:18px;
+    background:var(--panel-glass); border:1px solid var(--line); border-radius:22px;
+    padding:26px 28px; margin-bottom:20px;
+    box-shadow:0 1px 2px rgba(20,18,14,.03), 0 8px 24px -18px rgba(20,18,14,.18);
+    backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
   }
-  .panel-title{ font-size:14px; font-weight:600; margin:0 0 4px; }
-  .panel-sub{ font-size:12.5px; color:var(--ink-soft); margin:0 0 14px; line-height:1.5; }
+  .panel-title{ font-family:'Space Grotesk','Inter',sans-serif; font-size:16px; font-weight:600; margin:0 0 5px; letter-spacing:-0.01em; }
+  .panel-sub{ font-size:13px; color:var(--ink-soft); margin:0 0 16px; line-height:1.55; max-width:62ch; }
 
   /* Batch loading */
   .scan-top{ display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
@@ -156,36 +211,36 @@
   .scan-actions{ display:flex; gap:8px; flex-wrap:wrap; }
   .scan-progress{ margin-top:14px; }
   .drain-track{ position:relative; height:8px; border-radius:6px; background:var(--line); overflow:hidden; }
-  .drain-fill{ position:absolute;left:0;top:0;bottom:0; border-radius:6px; width:0%; transition:width .4s ease; background:linear-gradient(90deg, var(--ink), var(--ink-soft)); }
+  .drain-fill{ position:absolute;left:0;top:0;bottom:0; border-radius:6px; width:0%; transition:width .4s ease; background:linear-gradient(90deg, var(--grad-a), var(--grad-b)); }
   .scan-status{ font-size:11.5px; color:var(--ink-soft); margin-top:6px; font-family:var(--mono); }
 
   /* Category matrix */
   .cat-matrix{
-    display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr));
-    gap:10px; margin-top:4px;
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(172px,1fr));
+    gap:12px; margin-top:4px;
   }
   .cat-card{
-    border:1px solid var(--line); border-radius:12px; padding:12px 13px;
-    background:var(--bg);
+    border:1px solid var(--line); border-radius:13px; padding:14px 15px;
+    background:var(--bg); transition:border-color .15s ease, transform .15s ease;
   }
-  .cat-card-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
-  .cat-emoji{ font-size:16px; }
-  .cat-importance{ font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; font-weight:700; }
+  .cat-card-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:9px; }
+  .cat-emoji{ font-size:17px; }
+  .cat-importance{ font-size:9.5px; text-transform:uppercase; letter-spacing:.05em; font-weight:700; }
   .cat-importance.vital{ color:var(--keep); }
   .cat-importance.trash{ color:var(--ink-soft); }
   .cat-importance.review{ color:var(--wait); }
-  .cat-label{ font-size:12.5px; color:var(--ink-soft); margin-bottom:2px; }
-  .cat-count{ font-family:var(--mono); font-size:20px; font-weight:600; }
-  .cat-sub{ font-size:10.5px; color:var(--ink-soft); font-family:var(--mono); margin-top:2px; }
+  .cat-label{ font-size:12.5px; color:var(--ink-soft); margin-bottom:3px; }
+  .cat-count{ font-family:var(--mono); font-size:22px; font-weight:600; }
+  .cat-sub{ font-size:10.5px; color:var(--ink-soft); font-family:var(--mono); margin-top:3px; }
   .cat-card-actions{ display:flex; gap:6px; margin-top:10px; }
   .mini-btn{
     flex:1; border:1px solid var(--line); background:var(--panel); color:var(--ink-soft);
     padding:5px 6px; border-radius:6px; font-size:10.5px; cursor:pointer; font-weight:600;
   }
   .mini-btn.rescue:hover{ border-color:var(--keep); color:var(--keep); background:var(--keep-bg); }
-  .cat-card.clickable{ cursor:pointer; transition:border-color .15s ease, box-shadow .15s ease; }
-  .cat-card.clickable:hover{ border-color:var(--ink); }
-  .cat-card.clickable.filtered{ border-color:var(--ink); box-shadow:0 0 0 1.5px var(--ink); }
+  .cat-card.clickable{ cursor:pointer; transition:border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+  .cat-card.clickable:hover{ border-color:var(--ink); transform:translateY(-2px); }
+  .cat-card.clickable.filtered{ border-color:transparent; box-shadow:0 0 0 2px var(--grad-a); }
   .active-category-badge{
     display:none; align-items:center; gap:8px; padding:7px 13px; border-radius:100px;
     font-size:12.5px; font-weight:600; border:1.5px solid var(--ink); color:var(--ink);
@@ -228,18 +283,20 @@
 
   .filters{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
   .chip{
-    border:1px solid var(--line); background:var(--panel); padding:6px 12px;
-    border-radius:100px; font-size:12.5px; cursor:pointer; color:var(--ink-soft);
+    border:1px solid var(--line); background:var(--panel); padding:7px 14px;
+    border-radius:100px; font-size:12.5px; font-weight:600; cursor:pointer; color:var(--ink-soft);
+    transition:border-color .15s ease, background .15s ease, color .15s ease;
   }
-  .chip.active{ background:var(--ink); color:var(--bg); border-color:var(--ink); }
+  .chip:hover{ border-color:#C7C3B8; }
+  .chip.active{ background:linear-gradient(135deg, var(--grad-a), var(--grad-b)); color:#fff; border-color:transparent; }
 
-  .list{ display:flex; flex-direction:column; gap:8px; max-height:520px; overflow-y:auto; padding-right:2px; }
+  .list{ display:flex; flex-direction:column; gap:9px; max-height:560px; overflow-y:auto; padding-right:2px; }
   .email-row{
-    background:var(--panel); border:1px solid var(--line); border-radius:10px;
-    padding:13px 15px; display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:14px;
-    transition:opacity .15s ease;
+    background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--row-accent, var(--line)); border-radius:11px;
+    padding:14px 16px; display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:14px;
+    transition:opacity .15s ease, border-color .15s ease;
   }
-  .email-row.is-trash{ opacity:.6; }
+  .email-row.is-trash{ opacity:.55; }
   .email-main{ min-width:0; }
   .email-top{ display:flex; align-items:baseline; gap:8px; margin-bottom:2px; flex-wrap:wrap; }
   .email-sender{ font-weight:600; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -253,10 +310,11 @@
   .row-actions{ display:flex; gap:6px; }
   .status-btn{
     border:1px solid var(--line); background:var(--panel); color:var(--ink-soft);
-    padding:6px 10px; border-radius:7px; font-size:11.5px; font-weight:600; cursor:pointer; white-space:nowrap;
+    padding:7px 12px; border-radius:999px; font-size:11.5px; font-weight:600; cursor:pointer; white-space:nowrap;
+    transition:border-color .15s ease, background .15s ease;
   }
-  .status-btn.rescue.active{ background:var(--keep-bg); border-color:var(--keep); color:var(--keep); }
-  .status-btn.trash.active{ background:var(--delete-bg); border-color:var(--delete); color:var(--delete); }
+  .status-btn.rescue.active{ background:linear-gradient(135deg, var(--keep), var(--mode-safe)); border-color:transparent; color:#fff; }
+  .status-btn.trash.active{ background:linear-gradient(135deg, var(--delete), var(--mode-live)); border-color:transparent; color:#fff; }
 
   .empty{ text-align:center; padding:50px 20px; color:var(--ink-soft); }
   .empty .display{ font-size:18px; color:var(--ink); margin-bottom:6px; }
@@ -281,7 +339,7 @@
   /* Settings modal */
   .modal-backdrop{ position:fixed;inset:0; background:rgba(20,19,15,.4); display:none; align-items:center;justify-content:center; padding:20px; z-index:50; }
   .modal-backdrop.show{display:flex;}
-  .modal{ background:var(--panel); border-radius:14px; max-width:480px; width:100%; padding:26px; max-height:86vh; overflow-y:auto; }
+  .modal{ background:var(--panel-glass); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border-radius:20px; max-width:480px; width:100%; padding:26px; max-height:86vh; overflow-y:auto; box-shadow:0 24px 60px -20px rgba(20,18,14,.4); }
   .modal h2{font-size:17px;margin:0 0 6px;}
   .modal p{font-size:13px;color:var(--ink-soft);line-height:1.55;}
   .modal ol{font-size:13px;color:var(--ink-soft);line-height:1.7;padding-left:18px;}
@@ -289,6 +347,12 @@
   .modal .row{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;}
   .modal a{color:var(--ink);}
   .small-note{font-size:11.5px;color:var(--ink-soft);margin-top:14px;padding-top:14px;border-top:1px solid var(--line);}
+  .provider-tabs{ display:flex; gap:8px; margin:14px 0 4px; border-bottom:1px solid var(--line); }
+  .provider-tab{
+    border:none; background:none; padding:9px 4px; font-size:13px; font-weight:600; color:var(--ink-soft);
+    cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px;
+  }
+  .provider-tab.active{ color:var(--ink); border-bottom-color:var(--ink); }
 
   @media (max-width:640px){
     .email-row{ grid-template-columns:1fr; }
@@ -319,7 +383,7 @@
       <button class="btn" id="themeBtn" title="Alternar modo noche" aria-label="Alternar modo noche">
         <svg id="themeIcon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
-      <button class="btn" id="settingsBtn">Ajustes de Google</button>
+      <button class="btn" id="settingsBtn">Ajustes de cuenta</button>
     </div>
   </header>
 
@@ -459,22 +523,46 @@
 <!-- Settings modal -->
 <div class="modal-backdrop" id="modalBackdrop">
   <div class="modal">
-    <h2 class="display">Conectar tu cuenta de Google</h2>
-    <p>Para leer y limpiar tu Gmail real, esta página necesita tu propio <b>Client ID de OAuth</b> de Google Cloud. No se comparte con nadie más — se guarda solo en tu navegador.</p>
-    <ol>
-      <li>Ve a <a href="https://console.cloud.google.com/apis/credentials" target="_blank">console.cloud.google.com/apis/credentials</a></li>
-      <li>Crea un proyecto (o usa uno existente) y habilita la <b>Gmail API</b></li>
-      <li>Configura la pantalla de consentimiento OAuth (modo "Externo" y agrégate como usuario de prueba)</li>
-      <li>Crea credenciales → <b>ID de cliente de OAuth</b> → tipo "Aplicación web"</li>
-      <li>En "Orígenes autorizados de JavaScript" agrega el origen desde donde abras este archivo</li>
-      <li>Copia el Client ID (termina en <code>.apps.googleusercontent.com</code>) y pégalo abajo</li>
-    </ol>
-    <input type="text" id="clientIdInput" placeholder="123456789-xxxx.apps.googleusercontent.com">
-    <div class="row">
-      <button class="btn" id="modalCancel">Cancelar</button>
-      <button class="btn primary" id="modalSave">Guardar y conectar</button>
+    <h2 class="display">Conectar tu correo</h2>
+    <p>Elige tu proveedor. Cada uno necesita su propio Client ID — se guarda solo en tu navegador, nunca se comparte.</p>
+
+    <div class="provider-tabs">
+      <button class="provider-tab active" id="tabGmail" data-tab="gmail">📧 Gmail</button>
+      <button class="provider-tab" id="tabOutlook" data-tab="outlook">📨 Outlook</button>
     </div>
-    <div class="small-note">Nota: los archivos .html abiertos con doble clic (protocolo <code>file://</code>) no funcionan con Google OAuth. Ábrelo desde un servidor local o un hosting, y usa esa misma URL como origen autorizado.</div>
+
+    <div class="provider-pane" id="paneGmail">
+      <ol>
+        <li>Ve a <a href="https://console.cloud.google.com/apis/credentials" target="_blank">console.cloud.google.com/apis/credentials</a></li>
+        <li>Crea un proyecto (o usa uno existente) y habilita la <b>Gmail API</b></li>
+        <li>Configura la pantalla de consentimiento OAuth (modo "Externo" y agrégate como usuario de prueba)</li>
+        <li>Crea credenciales → <b>ID de cliente de OAuth</b> → tipo "Aplicación web"</li>
+        <li>En "Orígenes autorizados de JavaScript" agrega el origen desde donde abras este archivo</li>
+        <li>Copia el Client ID (termina en <code>.apps.googleusercontent.com</code>) y pégalo abajo</li>
+      </ol>
+      <input type="text" id="clientIdInput" placeholder="123456789-xxxx.apps.googleusercontent.com">
+      <div class="row">
+        <button class="btn" id="modalCancel">Cerrar</button>
+        <button class="btn primary" id="modalSave">Guardar y conectar Gmail</button>
+      </div>
+      <div class="small-note">Nota: los archivos .html abiertos con doble clic (<code>file://</code>) no funcionan con estos OAuth. Ábrelo desde un servidor local o un hosting, y usa esa misma URL como origen autorizado.</div>
+    </div>
+
+    <div class="provider-pane" id="paneOutlook" style="display:none;">
+      <ol>
+        <li>Ve a <a href="https://portal.azure.com" target="_blank">portal.azure.com</a> → "Microsoft Entra ID" → "Registros de aplicaciones" → "Nuevo registro"</li>
+        <li>En "Tipos de cuenta admitidos" elige "Cuentas en cualquier directorio organizativo y cuentas Microsoft personales"</li>
+        <li>En "Autenticación" → "Agregar una plataforma" → "Aplicación de página única (SPA)" → agrega como URI de redirección la misma URL desde donde abras este archivo</li>
+        <li>En "Permisos de API" → "Agregar un permiso" → "Microsoft Graph" → "Permisos delegados" → marca <b>Mail.ReadWrite</b> y <b>User.Read</b></li>
+        <li>Copia el "Id. de aplicación (cliente)" desde "Resumen" y pégalo abajo</li>
+      </ol>
+      <input type="text" id="clientIdOutlookInput" placeholder="Id. de aplicación (cliente) de Azure">
+      <div class="row">
+        <button class="btn" id="modalCancelOutlook">Cerrar</button>
+        <button class="btn primary" id="modalSaveOutlook">Guardar y conectar Outlook</button>
+      </div>
+      <div class="small-note">Nota: igual que con Gmail, esto no funciona abierto con doble clic (<code>file://</code>). Usa la misma URL de hosting que registraste como URI de redirección.</div>
+    </div>
   </div>
 </div>
 
@@ -701,6 +789,9 @@
     accessToken: null,
     tokenClient: null,
     clientId: localStorage.getItem('bc_client_id') || '',
+    clientIdOutlook: localStorage.getItem('bc_client_id_outlook') || '',
+    provider: null, // 'gmail' | 'outlook' | null (demo)
+    msalInstance: null,
     lastRoundStats: {deleted:0, rescued:0},
     loadSession: 0,
     seenIds: new Set(),
@@ -749,7 +840,7 @@
     }
   }
 
-  async function loadLiveBatch(mySession){
+  async function loadGmailBatch(mySession){
     const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
     url.searchParams.set('maxResults','500');
     url.searchParams.set('labelIds','INBOX');
@@ -794,6 +885,52 @@
     }
   }
 
+  function buildOutlookDateFilter(block){
+    if(!block || block==='all') return null;
+    if(block==='older') return `receivedDateTime lt ${EARLIEST_BLOCK_YEAR}-01-01T00:00:00Z`;
+    return `receivedDateTime ge ${block}-01-01T00:00:00Z and receivedDateTime lt ${Number(block)+1}-01-01T00:00:00Z`;
+  }
+
+  async function loadOutlookBatch(mySession){
+    let url = state.pageToken; // en Outlook, pageToken guarda la URL @odata.nextLink completa
+    if(!url){
+      const params = new URLSearchParams();
+      params.set('$top','250');
+      params.set('$select','subject,from,receivedDateTime,hasAttachments');
+      params.set('$orderby','receivedDateTime desc');
+      const filter = buildOutlookDateFilter(state.yearBlock);
+      if(filter) params.set('$filter', filter);
+      url = `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?${params.toString()}`;
+    }
+    const res = await fetch(url, {headers:{'Authorization':'Bearer '+state.accessToken}});
+    const data = await res.json();
+    if(state.loadSession!==mySession) return;
+    if(data.error){ throw new Error(data.error.message || 'Error de Microsoft Graph'); }
+    state.pageToken = data['@odata.nextLink'] || null;
+    const items = (data.value || []).filter(m=>!state.seenIds.has(m.id));
+    let added = 0;
+    items.forEach(m=>{
+      state.seenIds.add(m.id);
+      const fromAddr = m.from && m.from.emailAddress ? (m.from.emailAddress.name || m.from.emailAddress.address) : 'Desconocido';
+      const subject = m.subject || '(sin asunto)';
+      const days = Math.max(0, Math.round((Date.now() - new Date(m.receivedDateTime).getTime())/86400000));
+      state.emails.push(withStatus({
+        id: m.id, sender: fromAddr, subject,
+        category: classifyEmail(fromAddr, subject), attachment: !!m.hasAttachments, days, size:''
+      }));
+      added++;
+    });
+    state.loadedCount += added;
+    setScanProgress(1, `Clasificando ${state.loadedCount.toLocaleString('es-MX')} correos…`);
+    updateScanCounts();
+    await sleep(80);
+  }
+
+  async function loadLiveBatch(mySession){
+    if(state.provider==='outlook') return loadOutlookBatch(mySession);
+    return loadGmailBatch(mySession);
+  }
+
   async function runBatch(){
     if(state.isScanning) return;
     const mySession = state.loadSession;
@@ -815,6 +952,9 @@
       stepEl.classList.toggle('active', i===n);
       stepEl.classList.toggle('done', i<n);
     });
+    document.querySelectorAll('#stepper .step-line').forEach((line,idx)=>{
+      line.classList.toggle('filled', n>idx+1);
+    });
     setModeUI();
     if(n===1) renderStage1();
     if(n===2){ state.listRenderLimit = LIST_PAGE_SIZE; renderStage2(); }
@@ -828,14 +968,15 @@
     document.getElementById('modeLiveBtn').classList.toggle('active', isLive);
     const banner = document.getElementById('modeBanner');
     banner.className = 'mode-banner ' + (isLive ? 'live' : 'demo');
+    const providerLabel = state.provider==='outlook' ? 'Outlook' : 'Gmail';
     banner.innerHTML = isLive
-      ? `🔴 <b>Modo real</b> — conectado a <b>${escapeHtml(state.liveEmail || 'tu cuenta de Gmail')}</b>. Lo que elimines se va a la papelera de tu Gmail de verdad.`
-      : `🧪 <b>Modo prueba</b> — los datos son simulados, nada de esto toca tu Gmail real. Explora sin riesgo.`;
+      ? `🔴 <b>Modo real (${providerLabel})</b> — conectado a <b>${escapeHtml(state.liveEmail || 'tu cuenta')}</b>. Lo que elimines se va a la papelera de verdad.`
+      : `🧪 <b>Modo prueba</b> — los datos son simulados, nada de esto toca tu correo real. Explora sin riesgo.`;
   }
 
   function switchToDemo(){
     if(state.mode==='live' && state.loadedCount>0){
-      const ok = confirm('Vas a salir del modo real y volver a modo prueba. Se perderá el progreso de clasificación cargado en esta sesión (no se borra nada de tu Gmail real). ¿Continuar?');
+      const ok = confirm('Vas a salir del modo real y volver a modo prueba. Se perderá el progreso de clasificación cargado en esta sesión (no se borra nada de tu correo real). ¿Continuar?');
       if(!ok) return;
     }
     state.loadSession++;
@@ -844,6 +985,7 @@
     state.autoScanning = false;
     state.accessToken = null;
     state.liveEmail = null;
+    state.provider = null;
     loadDemo();
     goToStage(1);
     setTimeout(()=>{ state.cancelScan = false; }, 0);
@@ -852,8 +994,9 @@
   document.getElementById('modeDemoBtn').addEventListener('click', switchToDemo);
   document.getElementById('modeLiveBtn').addEventListener('click', ()=>{
     if(state.mode==='live') return;
-    if(!state.clientId){ document.getElementById('modalBackdrop').classList.add('show'); return; }
-    startGoogleAuth();
+    document.getElementById('clientIdInput').value = state.clientId;
+    document.getElementById('clientIdOutlookInput').value = state.clientIdOutlook;
+    document.getElementById('modalBackdrop').classList.add('show');
   });
 
   // ---------- STAGE 1 ----------
@@ -1060,7 +1203,7 @@
 
   function emailRowHtml(e){
     const meta = CATEGORY_META[e.category];
-    return `<div class="email-row ${e.status==='trash'?'is-trash':''}" data-id="${e.id}">
+    return `<div class="email-row ${e.status==='trash'?'is-trash':''}" data-id="${e.id}" style="--row-accent:var(--cat-${e.category});">
       <div class="email-main">
         <div class="email-top">
           <span class="email-sender">${escapeHtml(e.sender)}</span>
@@ -1182,9 +1325,18 @@
 
   // ---------- STAGE 3 ----------
   async function gmailAction(id, action){
-    const base = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/' + id;
-    const headers = {'Authorization':'Bearer '+state.accessToken, 'Content-Type':'application/json'};
-    if(action==='delete'){ await fetch(base+'/trash', {method:'POST', headers}); }
+    if(action!=='delete') return;
+    if(state.provider==='outlook'){
+      await fetch(`https://graph.microsoft.com/v1.0/me/messages/${id}/move`, {
+        method:'POST',
+        headers:{'Authorization':'Bearer '+state.accessToken, 'Content-Type':'application/json'},
+        body: JSON.stringify({destinationId:'deleteditems'})
+      });
+    } else {
+      await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}/trash`, {
+        method:'POST', headers:{'Authorization':'Bearer '+state.accessToken}
+      });
+    }
   }
 
   function renderStage3(){
@@ -1199,8 +1351,9 @@
     const isLive = state.mode==='live';
     const dBanner = document.getElementById('deleteModeBanner');
     dBanner.className = 'mode-banner ' + (isLive ? 'live' : 'demo');
+    const providerLabel = state.provider==='outlook' ? 'Outlook' : 'Gmail';
     dBanner.innerHTML = isLive
-      ? `🔴 Vas a borrar de <b>${escapeHtml(state.liveEmail || 'tu Gmail real')}</b>. Esto es permanente (papelera de Gmail).`
+      ? `🔴 Vas a borrar de <b>${escapeHtml(state.liveEmail || 'tu cuenta real')}</b> (${providerLabel}). Esto es permanente (elementos eliminados/papelera).`
       : `🧪 Estás en modo prueba — esta eliminación es simulada, no afecta ningún correo real.`;
 
     const byCat = {};
@@ -1252,40 +1405,72 @@
 
   document.getElementById('loadMoreBtn').addEventListener('click', ()=>goToStage(1));
 
-  // ---------- Google Auth ----------
+  // ---------- Google / Outlook Auth ----------
   const modalBackdrop = document.getElementById('modalBackdrop');
   document.getElementById('settingsBtn').addEventListener('click', ()=>{
     document.getElementById('clientIdInput').value = state.clientId;
+    document.getElementById('clientIdOutlookInput').value = state.clientIdOutlook;
     modalBackdrop.classList.add('show');
   });
+  document.querySelectorAll('.provider-tab').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      document.querySelectorAll('.provider-tab').forEach(t=>t.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('paneGmail').style.display = tab.dataset.tab==='gmail' ? 'block' : 'none';
+      document.getElementById('paneOutlook').style.display = tab.dataset.tab==='outlook' ? 'block' : 'none';
+    });
+  });
   document.getElementById('modalCancel').addEventListener('click', ()=>modalBackdrop.classList.remove('show'));
+  document.getElementById('modalCancelOutlook').addEventListener('click', ()=>modalBackdrop.classList.remove('show'));
   document.getElementById('modalSave').addEventListener('click', ()=>{
     const val = document.getElementById('clientIdInput').value.trim();
     if(val){ state.clientId = val; localStorage.setItem('bc_client_id', val); }
     modalBackdrop.classList.remove('show');
     startGoogleAuth();
   });
+  document.getElementById('modalSaveOutlook').addEventListener('click', ()=>{
+    const val = document.getElementById('clientIdOutlookInput').value.trim();
+    if(val){ state.clientIdOutlook = val; localStorage.setItem('bc_client_id_outlook', val); state.msalInstance = null; }
+    modalBackdrop.classList.remove('show');
+    startOutlookAuth();
+  });
 
   async function fetchLiveEmail(){
     try{
-      const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
-        headers:{'Authorization':'Bearer '+state.accessToken}
-      });
-      const data = await res.json();
-      state.liveEmail = data.emailAddress || null;
+      if(state.provider==='outlook'){
+        const res = await fetch('https://graph.microsoft.com/v1.0/me', {
+          headers:{'Authorization':'Bearer '+state.accessToken}
+        });
+        const data = await res.json();
+        state.liveEmail = data.mail || data.userPrincipalName || null;
+      } else {
+        const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+          headers:{'Authorization':'Bearer '+state.accessToken}
+        });
+        const data = await res.json();
+        state.liveEmail = data.emailAddress || null;
+      }
       setModeUI();
     }catch(err){ console.error(err); }
   }
 
-  // Conteo EXACTO de la bandeja (mismo número que Gmail muestra en su barra lateral),
+  // Conteo EXACTO de la bandeja (mismo número que Gmail/Outlook muestran en su propia interfaz),
   // en vez de la "estimación" aproximada que da la lista de mensajes.
   async function fetchInboxLabelInfo(){
     try{
-      const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/labels/INBOX', {
-        headers:{'Authorization':'Bearer '+state.accessToken}
-      });
-      const data = await res.json();
-      if(data.messagesTotal!=null){ state.estimateTotal = data.messagesTotal; updateScanCounts(); }
+      if(state.provider==='outlook'){
+        const res = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders/inbox', {
+          headers:{'Authorization':'Bearer '+state.accessToken}
+        });
+        const data = await res.json();
+        if(data.totalItemCount!=null){ state.estimateTotal = data.totalItemCount; updateScanCounts(); }
+      } else {
+        const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/labels/INBOX', {
+          headers:{'Authorization':'Bearer '+state.accessToken}
+        });
+        const data = await res.json();
+        if(data.messagesTotal!=null){ state.estimateTotal = data.messagesTotal; updateScanCounts(); }
+      }
     }catch(err){ console.error(err); }
   }
 
@@ -1303,6 +1488,7 @@
           if(resp.error){ console.error(resp); alert('Error al autenticar: '+resp.error); return; }
           state.accessToken = resp.access_token;
           state.mode = 'live';
+          state.provider = 'gmail';
           state.loadSession++;      // invalida cualquier lote/autoscan que siga corriendo de antes
           const mySession = state.loadSession;
           state.cancelScan = true;  // señal extra para que ese ciclo viejo se detenga en su próxima vuelta
@@ -1329,6 +1515,64 @@
     }catch(err){
       console.error(err);
       alert('No se pudo iniciar la autenticación de Google. Revisa que el Client ID y el origen autorizado sean correctos.');
+    }
+  }
+
+  function getMsalInstance(){
+    if(state.msalInstance) return state.msalInstance;
+    state.msalInstance = new msal.PublicClientApplication({
+      auth: {
+        clientId: state.clientIdOutlook,
+        authority: 'https://login.microsoftonline.com/common',
+        redirectUri: window.location.href.split('#')[0].split('?')[0]
+      }
+    });
+    return state.msalInstance;
+  }
+
+  async function startOutlookAuth(){
+    if(!state.clientIdOutlook) return;
+    if(typeof msal === 'undefined'){
+      alert('MSAL.js aún no ha cargado, o el origen actual (file://) no es compatible. Ábrelo desde un servidor local o hosting.');
+      return;
+    }
+    try{
+      const msalApp = getMsalInstance();
+      await msalApp.initialize();
+      const loginResp = await msalApp.loginPopup({ scopes:['Mail.ReadWrite','User.Read'] });
+      const account = loginResp.account;
+      msalApp.setActiveAccount(account);
+      let tokenResp;
+      try{
+        tokenResp = await msalApp.acquireTokenSilent({ scopes:['Mail.ReadWrite','User.Read'], account });
+      }catch(silentErr){
+        tokenResp = await msalApp.acquireTokenPopup({ scopes:['Mail.ReadWrite','User.Read'] });
+      }
+      state.accessToken = tokenResp.accessToken;
+      state.mode = 'live';
+      state.provider = 'outlook';
+      state.loadSession++;
+      const mySession = state.loadSession;
+      state.cancelScan = true;
+      state.isScanning = false;
+      state.autoScanning = false;
+      state.emails = [];
+      state.seenIds = new Set();
+      state.loadedCount = 0;
+      state.pageToken = null;
+      state.estimateTotal = null;
+      state.liveEmail = account.username || null;
+      state.yearBlock = 'all';
+      state.categoryFilter = null;
+      setModeUI();
+      goToStage(1);
+      await fetchInboxLabelInfo();
+      if(state.loadSession!==mySession) return;
+      state.cancelScan = false;
+      startFullAutoScan();
+    }catch(err){
+      console.error(err);
+      alert('No se pudo conectar con Outlook: '+(err && err.message ? err.message : 'revisa el Client ID y la URI de redirección en Azure.'));
     }
   }
 
