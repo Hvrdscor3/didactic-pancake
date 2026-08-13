@@ -411,11 +411,12 @@
 
       <div class="scan-top" style="margin-top:16px;">
         <div>
-          <div class="scan-num"><span id="loadedCount">0</span><span class="scan-sep">/</span><span id="estimateCount">—</span> correos clasificados</div>
+          <div class="scan-num">Lote <span id="batchNumber">0</span></div>
           <div class="scan-status" id="scanRangeLabel" style="margin-top:4px;"></div>
+          <div class="scan-status" id="totalLoadedLabel" style="margin-top:2px;"></div>
         </div>
         <div class="scan-actions">
-          <button class="btn" id="loadBatchBtn">Cargar lote de 500</button>
+          <button class="btn" id="loadBatchBtn">Siguiente lote</button>
           <button class="btn primary" id="autoScanBtn">Cargar todo automáticamente</button>
         </div>
       </div>
@@ -791,6 +792,7 @@
     clientId: localStorage.getItem('bc_client_id') || '',
     clientIdOutlook: localStorage.getItem('bc_client_id_outlook') || '',
     provider: null, // 'gmail' | 'outlook' | null (demo)
+    batchNumber: 0,
     msalInstance: null,
     lastRoundStats: {deleted:0, rescued:0},
     loadSession: 0,
@@ -811,6 +813,7 @@
     state.mode = 'demo';
     state.yearBlock = 'all';
     state.categoryFilter = null;
+    state.batchNumber = 0;
     state.emails = JSON.parse(JSON.stringify(DEMO_SEED));
     state.loadedCount = DEMO_SEED.length;
     state.estimateTotal = DEMO_ESTIMATE_TOTAL;
@@ -938,6 +941,7 @@
     updateScanCounts();
     try{
       if(state.mode==='live'){ await loadLiveBatch(mySession); } else { await loadDemoBatch(mySession); }
+      if(state.loadSession===mySession) state.batchNumber++;
     }catch(err){ console.error(err); alert('Hubo un error cargando el lote. Revisa la consola.'); }
     state.isScanning = false;
     renderStage1();
@@ -1001,16 +1005,16 @@
 
   // ---------- STAGE 1 ----------
   function updateScanCounts(){
-    document.getElementById('loadedCount').textContent = state.loadedCount.toLocaleString('es-MX');
-    document.getElementById('estimateCount').textContent = state.estimateTotal!=null ? state.estimateTotal.toLocaleString('es-MX') : '—';
+    document.getElementById('batchNumber').textContent = state.batchNumber;
+    document.getElementById('totalLoadedLabel').textContent = `${state.loadedCount.toLocaleString('es-MX')} correos cargados en total`;
     const doneLoading = state.mode==='live' ? (!state.pageToken && state.loadedCount>0) : state.loadedCount>=state.estimateTotal;
     document.getElementById('loadBatchBtn').disabled = state.isScanning || doneLoading;
     document.getElementById('autoScanBtn').disabled = (state.isScanning && !state.autoScanning) || (doneLoading && !state.autoScanning);
+    if(doneLoading){ document.getElementById('loadBatchBtn').textContent = 'Bandeja completa'; }
+    else{ document.getElementById('loadBatchBtn').textContent = 'Siguiente lote'; }
     const rangeLabel = document.getElementById('scanRangeLabel');
     if(rangeLabel){
-      rangeLabel.textContent = state.yearBlock==='all'
-        ? 'Rango: todo el inbox'
-        : `Rango: ${blockLabel(state.yearBlock)}${state.mode==='live' ? ' (conteo aproximado para este rango)' : ''}`;
+      rangeLabel.textContent = state.yearBlock==='all' ? 'Rango: todo el inbox' : `Rango: ${blockLabel(state.yearBlock)}`;
     }
   }
   function setScanProgress(fraction, text){
@@ -1053,6 +1057,7 @@
     state.emails = [];
     state.seenIds = new Set();
     state.loadedCount = 0;
+    state.batchNumber = 0;
     state.pageToken = null;
     state.categoryFilter = null;
     state.estimateTotal = state.mode==='demo' ? (DEMO_BLOCK_TOTALS[state.yearBlock] ?? DEMO_ESTIMATE_TOTAL) : null;
@@ -1497,6 +1502,7 @@
           state.emails = [];
           state.seenIds = new Set();
           state.loadedCount = 0;
+          state.batchNumber = 0;
           state.pageToken = null;
           state.estimateTotal = null;
           state.liveEmail = null;
@@ -1559,6 +1565,7 @@
       state.emails = [];
       state.seenIds = new Set();
       state.loadedCount = 0;
+      state.batchNumber = 0;
       state.pageToken = null;
       state.estimateTotal = null;
       state.liveEmail = account.username || null;
