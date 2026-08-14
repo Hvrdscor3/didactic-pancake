@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="https://alcdn.msauth.net/browser/3.7.1/js/msal-browser.min.js" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js" async defer></script>
 <style>
   :root{
     --bg: #FAFAF7;
@@ -1547,10 +1547,35 @@
     return state.msalInstance;
   }
 
+  function loadScriptOnce(src){
+    return new Promise((resolve, reject)=>{
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  async function ensureMsalLoaded(){
+    if(typeof msal !== 'undefined') return true;
+    // el <script> del <head> pudo seguir cargando (async): esperamos un poco antes de rendirnos
+    for(let i=0;i<20;i++){
+      if(typeof msal !== 'undefined') return true;
+      await sleep(150);
+    }
+    // sigue sin cargar: probamos un CDN alterno (unpkg) como respaldo
+    try{
+      await loadScriptOnce('https://unpkg.com/@azure/msal-browser@3/lib/msal-browser.min.js');
+    }catch(err){ /* seguimos al chequeo final de abajo */ }
+    return typeof msal !== 'undefined';
+  }
+
   async function startOutlookAuth(){
     if(!state.clientIdOutlook) return;
-    if(typeof msal === 'undefined'){
-      alert('MSAL.js aún no ha cargado, o el origen actual (file://) no es compatible. Ábrelo desde un servidor local o hosting.');
+    const loaded = await ensureMsalLoaded();
+    if(!loaded){
+      alert('No se pudo cargar MSAL.js (la librería de Microsoft). Revisa tu conexión, o que no la esté bloqueando un bloqueador de anuncios/extensión, y vuelve a intentar. Recuerda también que no funciona si abres el archivo con doble clic (file://).');
       return;
     }
     try{
